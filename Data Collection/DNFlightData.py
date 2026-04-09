@@ -103,6 +103,7 @@ def get_danang_all_flights_paginated(date, terminal="1"):
                         
                         flight_data = {
                             "Data Retrieved At (VN)": scrape_time,
+                            "Flight Date": date,
                             "Direction": label,
                             "Scheduled Time": scheduled_time,
                             "Estimated Time": estimated_time,
@@ -123,6 +124,7 @@ def get_danang_all_flights_paginated(date, terminal="1"):
     df_final = pd.DataFrame(all_flights)
     expected_columns = [
         "Data Retrieved At (VN)",
+        "Flight Date",
         "Direction",
         "Scheduled Time",
         "Estimated Time",

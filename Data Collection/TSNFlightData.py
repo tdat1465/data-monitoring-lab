@@ -97,7 +97,9 @@ df_departures = get_tia_flights(flight_type="departure", max_pages=2)
 # ignore_index=True giúp đánh lại số thứ tự từ 0 cho toàn bộ bảng
 df_all = pd.concat([df_arrivals, df_departures], ignore_index=True)
 collected_at_vn = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d %H:%M:%S")
+flight_date = collected_at_vn.split(" ")[0]
 df_all.insert(0, "Data Retrieved At (VN)", collected_at_vn)
+df_all.insert(1, "Flight Date", flight_date)
 
 print("\n\n" + "="*50)
 print(f"\n=> Tổng cộng thu thập được: {len(df_all)} chuyến bay.")
