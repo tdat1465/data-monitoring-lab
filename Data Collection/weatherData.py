@@ -79,6 +79,45 @@ if df_metar is not None:
     code_dir = Path(__file__).resolve().parent
     output_path = code_dir / "data" / "raw" / "weather.csv"
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    df_metar.to_csv(output_path, index=False, encoding="utf-8-sig")
-    
-    print(f"Saved file: {output_path}")
+
+    # Chỉ thêm dữ liệu mới vào cuối file, tránh ghi đè và tránh trùng dữ liệu cũ.
+    key_columns = ["ICAO Code", "Report Time (UTC)", "Raw METAR"]
+
+    if output_path.exists():
+        try:
+            df_existing = pd.read_csv(output_path, encoding="utf-8-sig")
+            if all(col in df_existing.columns for col in key_columns):
+                existing_keys = set(
+                    df_existing[key_columns]
+                    .fillna("")
+                    .astype(str)
+                    .agg("|".join, axis=1)
+                )
+
+                incoming_keys = (
+                    df_metar[key_columns]
+                    .fillna("")
+                    .astype(str)
+                    .agg("|".join, axis=1)
+                )
+                df_to_append = df_metar[~incoming_keys.isin(existing_keys)]
+            else:
+                # Nếu file cũ thiếu cột khóa, vẫn append để không mất dữ liệu mới.
+                df_to_append = df_metar
+        except Exception as e:
+            print(f"Không đọc được file cũ để lọc trùng ({e}), sẽ append toàn bộ dữ liệu mới.")
+            df_to_append = df_metar
+    else:
+        df_to_append = df_metar
+
+    if not df_to_append.empty:
+        df_to_append.to_csv(
+            output_path,
+            mode="a",
+            header=not output_path.exists(),
+            index=False,
+            encoding="utf-8-sig"
+        )
+        print(f"Đã thêm {len(df_to_append)} dòng mới vào file: {output_path}")
+    else:
+        print(f"Không có dòng mới để thêm. File giữ nguyên: {output_path}")

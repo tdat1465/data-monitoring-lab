@@ -107,5 +107,45 @@ print(f"\n=> Tổng cộng thu thập được: {len(df_all)} chuyến bay.")
 code_dir = Path(__file__).resolve().parent
 output_path = code_dir / "data" / "raw" / "TSN.csv"
 output_path.parent.mkdir(parents=True, exist_ok=True)
-df_all.to_csv(output_path, index=False, encoding="utf-8-sig")
-print(f"Saved file: {output_path}")
+
+# Chỉ thêm dữ liệu mới vào cuối file, tránh ghi đè và tránh trùng dữ liệu cũ.
+key_columns = ["Flight Date", "Direction", "Scheduled Time", "Airport", "Flight Number"]
+
+if output_path.exists():
+    try:
+        df_existing = pd.read_csv(output_path, encoding="utf-8-sig")
+        if all(col in df_existing.columns for col in key_columns):
+            existing_keys = set(
+                df_existing[key_columns]
+                .fillna("")
+                .astype(str)
+                .agg("|".join, axis=1)
+            )
+
+            incoming_keys = (
+                df_all[key_columns]
+                .fillna("")
+                .astype(str)
+                .agg("|".join, axis=1)
+            )
+            df_to_append = df_all[~incoming_keys.isin(existing_keys)]
+        else:
+            # Nếu file cũ thiếu cột khóa, vẫn append để không mất dữ liệu mới.
+            df_to_append = df_all
+    except Exception as e:
+        print(f"Không đọc được file cũ để lọc trùng ({e}), sẽ append toàn bộ dữ liệu mới.")
+        df_to_append = df_all
+else:
+    df_to_append = df_all
+
+if not df_to_append.empty:
+    df_to_append.to_csv(
+        output_path,
+        mode="a",
+        header=not output_path.exists(),
+        index=False,
+        encoding="utf-8-sig"
+    )
+    print(f"Đã thêm {len(df_to_append)} dòng mới vào file: {output_path}")
+else:
+    print(f"Không có dòng mới để thêm. File giữ nguyên: {output_path}")
