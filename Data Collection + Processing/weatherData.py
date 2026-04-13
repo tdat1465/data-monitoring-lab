@@ -39,7 +39,7 @@ def to_vietnam_time(obs_time_utc):
 
 def get_aviation_weather():
     # NOAA API URL (returns JSON)
-    icao_codes = "VVTS,VVNB,VVDN"
+    icao_codes = "VVTS,VVNB,VVDN,"
     url = f"https://aviationweather.gov/api/data/metar?ids={icao_codes}&format=json&hours=24"
     
     # Fake User-Agent to avoid connection rejection
