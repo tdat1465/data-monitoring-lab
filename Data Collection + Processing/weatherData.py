@@ -40,15 +40,20 @@ def to_vietnam_time(obs_time_utc):
 
 def get_aviation_weather():
     # NOAA API URL (returns JSON)
-    icao_codes = "VVTS,VVNB,VVDN"
-    url = f"https://aviationweather.gov/api/data/metar?ids={icao_codes}&format=json&hours=24"
+    icao_codes = ["VVTS", "VVNB", "VVDN"]
+    url = "https://aviationweather.gov/api/data/metar"
+    params = {
+        "ids": ",".join(icao_codes),
+        "format": "json",
+        "hours": "24",
+    }
     
     # Fake User-Agent to avoid connection rejection
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
     
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, params=params, headers=headers, timeout=30)
     
     if response.status_code == 200:
         data = response.json()
@@ -71,7 +76,7 @@ def get_aviation_weather():
             
         return pd.DataFrame(parsed_data)
     else:
-        print(f"Error retrieving data: {response.status_code}")
+        print(f"Error retrieving data: {response.status_code} - {response.text[:300]}")
         return None
 
 
