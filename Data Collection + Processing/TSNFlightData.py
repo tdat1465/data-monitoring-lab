@@ -1,7 +1,8 @@
 import requests
 import time
 import pandas as pd
-from pathlib import Path
+
+from db_utils import save_dataframe
 
 def get_tia_flights(flight_type="arrival", max_pages=2):
     session = requests.Session()
@@ -80,72 +81,46 @@ def get_tia_flights(flight_type="arrival", max_pages=2):
     except Exception as e:
         print(f"Có lỗi xảy ra: {e}")
 
-    # Trả về DataFrame
     return pd.DataFrame(all_flights)
 
-# ==========================================
-# CHẠY THỬ VÀ GỘP DỮ LIỆU
-# ==========================================
 
-# 1. Lấy dữ liệu 2 trang chiều Đến
-df_arrivals = get_tia_flights(flight_type="arrival", max_pages=2)
-
-# 2. Lấy dữ liệu 2 trang chiều Đi
-df_departures = get_tia_flights(flight_type="departure", max_pages=2)
-
-# 3. Gộp 2 bảng lại thành 1 tập dữ liệu (Dataset) hoàn chỉnh
-# ignore_index=True giúp đánh lại số thứ tự từ 0 cho toàn bộ bảng
-df_all = pd.concat([df_arrivals, df_departures], ignore_index=True)
-collected_at_vn = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d %H:%M:%S")
-flight_date = collected_at_vn.split(" ")[0]
-df_all.insert(0, "Data Retrieved At (VN)", collected_at_vn)
-df_all.insert(1, "Flight Date", flight_date)
-
-print("\n\n" + "="*50)
-print(f"\n=> Tổng cộng thu thập được: {len(df_all)} chuyến bay.")
-
-code_dir = Path(__file__).resolve().parent
-output_path = code_dir / "data" / "raw" / "TSN.csv"
-output_path.parent.mkdir(parents=True, exist_ok=True)
-
-# Chỉ thêm dữ liệu mới vào cuối file, tránh ghi đè và tránh trùng dữ liệu cũ.
-key_columns = ["Flight Date", "Direction", "Scheduled Time", "Airport", "Flight Number"]
-
-if output_path.exists():
-    try:
-        df_existing = pd.read_csv(output_path, encoding="utf-8-sig")
-        if all(col in df_existing.columns for col in key_columns):
-            existing_keys = set(
-                df_existing[key_columns]
-                .fillna("")
-                .astype(str)
-                .agg("|".join, axis=1)
-            )
-
-            incoming_keys = (
-                df_all[key_columns]
-                .fillna("")
-                .astype(str)
-                .agg("|".join, axis=1)
-            )
-            df_to_append = df_all[~incoming_keys.isin(existing_keys)]
-        else:
-            # Nếu file cũ thiếu cột khóa, vẫn append để không mất dữ liệu mới.
-            df_to_append = df_all
-    except Exception as e:
-        print(f"Không đọc được file cũ để lọc trùng ({e}), sẽ append toàn bộ dữ liệu mới.")
-        df_to_append = df_all
-else:
-    df_to_append = df_all
-
-if not df_to_append.empty:
-    df_to_append.to_csv(
-        output_path,
-        mode="a",
-        header=not output_path.exists(),
-        index=False,
-        encoding="utf-8-sig"
+def _to_db_schema(df: pd.DataFrame) -> pd.DataFrame:
+    return df.rename(
+        columns={
+            "Data Retrieved At (VN)": "data_retrieved_at_vn",
+            "Flight Date": "flight_date",
+            "Direction": "direction",
+            "Scheduled Time": "scheduled_time",
+            "Estimated Time": "estimated_time",
+            "Airport": "airport",
+            "Flight Number": "flight_number",
+            "Status": "status",
+        }
     )
-    print(f"Đã thêm {len(df_to_append)} dòng mới vào file: {output_path}")
-else:
-    print(f"Không có dòng mới để thêm. File giữ nguyên: {output_path}")
+
+
+def main():
+    df_arrivals = get_tia_flights(flight_type="arrival", max_pages=2)
+    df_departures = get_tia_flights(flight_type="departure", max_pages=2)
+
+    df_all = pd.concat([df_arrivals, df_departures], ignore_index=True)
+    if df_all.empty:
+        print("TSN: Không thu thập được dữ liệu chuyến bay.")
+        return
+
+    collected_at_vn = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d %H:%M:%S")
+    flight_date = collected_at_vn.split(" ")[0]
+    df_all.insert(0, "Data Retrieved At (VN)", collected_at_vn)
+    df_all.insert(1, "Flight Date", flight_date)
+
+    db_df = _to_db_schema(df_all)
+    inserted = save_dataframe(
+        db_df,
+        table_name="flights_tsn",
+        unique_cols=["flight_date", "direction", "scheduled_time", "airport", "flight_number"],
+    )
+    print(f"TSN: Đã ghi {inserted}/{len(db_df)} dòng vào PostgreSQL.")
+
+
+if __name__ == "__main__":
+    main()

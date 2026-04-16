@@ -1,7 +1,8 @@
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-from pathlib import Path
+
+from db_utils import save_dataframe
 
 def get_noibai_all_flights(date, terminal="T1"):
     """
@@ -84,64 +85,39 @@ def get_noibai_all_flights(date, terminal="T1"):
     df_final = df_final.reindex(columns=expected_columns)
     return df_final
 
-# ==========================================
-# CHẠY THỬ CHƯƠNG TRÌNH
-# ==========================================
 
-# Chỉ định ngày cần lấy (Định dạng YYYY-MM-DD)
-target_date = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d")
-target_terminal = "T1" # T1 là quốc nội, T2 là quốc tế
+def _to_db_schema(df: pd.DataFrame) -> pd.DataFrame:
+    return df.rename(
+        columns={
+            "Data Retrieved At (VN)": "data_retrieved_at_vn",
+            "Flight Date": "flight_date",
+            "Direction": "direction",
+            "Scheduled Time": "scheduled_time",
+            "Estimated Time": "estimated_time",
+            "Airport": "airport",
+            "Flight Number": "flight_number",
+            "Status": "status",
+        }
+    )
 
-df_noibai = get_noibai_all_flights(date=target_date, terminal=target_terminal)
 
-if not df_noibai.empty:
-    print("\n" + "="*70)
-    print(f"\n=> Tổng cộng thu thập được: {len(df_noibai)} chuyến bay.")
+def main():
+    target_date = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d")
+    target_terminal = "T1"
 
-    code_dir = Path(__file__).resolve().parent
-    output_path = code_dir / "data" / "raw" / "NB.csv"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df_noibai = get_noibai_all_flights(date=target_date, terminal=target_terminal)
+    if df_noibai.empty:
+        print("NB: Không thu thập được dữ liệu chuyến bay.")
+        return
 
-    # Chỉ thêm dữ liệu mới vào cuối file, tránh ghi đè và tránh trùng dữ liệu cũ.
-    key_columns = ["Flight Date", "Direction", "Scheduled Time", "Airport", "Flight Number"]
+    db_df = _to_db_schema(df_noibai)
+    inserted = save_dataframe(
+        db_df,
+        table_name="flights_nb",
+        unique_cols=["flight_date", "direction", "scheduled_time", "airport", "flight_number"],
+    )
+    print(f"NB: Đã ghi {inserted}/{len(db_df)} dòng vào PostgreSQL.")
 
-    if output_path.exists():
-        try:
-            df_existing = pd.read_csv(output_path, encoding="utf-8-sig")
-            if all(col in df_existing.columns for col in key_columns):
-                existing_keys = set(
-                    df_existing[key_columns]
-                    .fillna("")
-                    .astype(str)
-                    .agg("|".join, axis=1)
-                )
 
-                incoming_keys = (
-                    df_noibai[key_columns]
-                    .fillna("")
-                    .astype(str)
-                    .agg("|".join, axis=1)
-                )
-                df_to_append = df_noibai[~incoming_keys.isin(existing_keys)]
-            else:
-                # Nếu file cũ thiếu cột khóa, vẫn append để không mất dữ liệu mới.
-                df_to_append = df_noibai
-        except Exception as e:
-            print(f"Không đọc được file cũ để lọc trùng ({e}), sẽ append toàn bộ dữ liệu mới.")
-            df_to_append = df_noibai
-    else:
-        df_to_append = df_noibai
-
-    if not df_to_append.empty:
-        df_to_append.to_csv(
-            output_path,
-            mode="a",
-            header=not output_path.exists(),
-            index=False,
-            encoding="utf-8-sig"
-        )
-        print(f"Đã thêm {len(df_to_append)} dòng mới vào file: {output_path}")
-    else:
-        print(f"Không có dòng mới để thêm. File giữ nguyên: {output_path}")
-else:
-    print("Không thu thập được dữ liệu nào.")
+if __name__ == "__main__":
+    main()
