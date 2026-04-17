@@ -164,7 +164,7 @@ def main():
     inserted = save_dataframe(
         db_df,
         table_name="flights_dn",
-        unique_cols=["flight_date", "direction", "scheduled_time", "airport", "flight_number"],
+        unique_cols=["flight_date", "direction", "scheduled_time", "airport", "flight_number", "status"],
     )
     print(f"DN: Đã ghi {inserted}/{len(db_df)} dòng vào PostgreSQL.")
 

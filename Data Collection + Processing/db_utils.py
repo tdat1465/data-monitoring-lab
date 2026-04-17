@@ -1,4 +1,6 @@
 import os
+from datetime import date, datetime
+import json
 
 import pandas as pd
 import psycopg2
@@ -13,6 +15,32 @@ def _get_database_url() -> str:
     return database_url
 
 
+def _normalize_cell_value(value):
+    if value is None or pd.isna(value):
+        return None
+    if isinstance(value, pd.Timestamp):
+        return str(value)
+    if isinstance(value, (datetime, date)):
+        return str(value)
+    if isinstance(value, (dict, list, tuple, set)):
+        return json.dumps(value, ensure_ascii=False)
+    return value
+
+
+def load_table(table_name: str) -> pd.DataFrame:
+    database_url = _get_database_url()
+    query = sql.SQL("SELECT * FROM {};").format(sql.Identifier(table_name))
+
+    with psycopg2.connect(database_url) as conn:
+        return pd.read_sql_query(query.as_string(conn), conn)
+
+
+def load_query(query: str) -> pd.DataFrame:
+    database_url = _get_database_url()
+    with psycopg2.connect(database_url) as conn:
+        return pd.read_sql_query(query, conn)
+
+
 def save_dataframe(df: pd.DataFrame, table_name: str, unique_cols: list[str]) -> int:
     if df is None or df.empty:
         return 0
@@ -22,8 +50,12 @@ def save_dataframe(df: pd.DataFrame, table_name: str, unique_cols: list[str]) ->
 
     database_url = _get_database_url()
     df = df.copy()
-    records = df.where(pd.notna(df), None).to_records(index=False).tolist()
     columns = list(df.columns)
+
+    records = [
+        tuple(_normalize_cell_value(value) for value in row)
+        for row in df.itertuples(index=False, name=None)
+    ]
 
     with psycopg2.connect(database_url) as conn:
         with conn.cursor() as cur:
