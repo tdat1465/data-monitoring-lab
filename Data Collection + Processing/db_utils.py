@@ -1,5 +1,6 @@
 import os
 from datetime import date, datetime
+import hashlib
 import json
 
 import pandas as pd
@@ -41,6 +42,28 @@ def load_query(query: str) -> pd.DataFrame:
         return pd.read_sql_query(query, conn)
 
 
+def _unique_index_name(table_name: str, unique_cols: list[str]) -> str:
+    fingerprint = f"{table_name}|{','.join(unique_cols)}".encode("utf-8")
+    digest = hashlib.md5(fingerprint).hexdigest()[:12]
+    base = f"ux_{table_name}_{digest}"
+    return base[:63]
+
+
+def _ensure_unique_index(cur, table_name: str, unique_cols: list[str]) -> None:
+    if not unique_cols:
+        return
+
+    index_name = _unique_index_name(table_name, unique_cols)
+    create_index_query = sql.SQL(
+        "CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({})"
+    ).format(
+        sql.Identifier(index_name),
+        sql.Identifier(table_name),
+        sql.SQL(", ").join(sql.Identifier(col) for col in unique_cols),
+    )
+    cur.execute(create_index_query)
+
+
 def save_dataframe(df: pd.DataFrame, table_name: str, unique_cols: list[str]) -> int:
     if df is None or df.empty:
         return 0
@@ -74,6 +97,10 @@ def save_dataframe(df: pd.DataFrame, table_name: str, unique_cols: list[str]) ->
                 """
             ).format(sql.Identifier(table_name), col_defs, unique_defs)
             cur.execute(create_table_query)
+
+            # If the table already exists, the UNIQUE constraint above is not added.
+            # Ensure there is a matching unique index for ON CONFLICT.
+            _ensure_unique_index(cur, table_name, unique_cols)
 
             insert_query = sql.SQL(
                 """
