@@ -1,21 +1,37 @@
 import requests
 import time
 import pandas as pd
+import re
 
 from db_utils import save_dataframe
+
+
+def _extract_view_dates(view_html: str) -> dict[str, str]:
+    def _get(cls: str) -> str | None:
+        m = re.search(rf'<span\s+class="{re.escape(cls)}">([^<]+)</span>', view_html)
+        return m.group(1).strip() if m else None
+
+    values = {
+        "LastModifiedDate": _get("LastModifiedDate"),
+        "FlightViewLastModifiedDate": _get("FlightViewLastModifiedDate"),
+        "FlightViewTemplateLastModifiedDate": _get("FlightViewTemplateLastModifiedDate"),
+    }
+    return {k: v for k, v in values.items() if v is not None}
 
 def get_tia_flights(flight_type="arrival", max_pages=2):
     session = requests.Session()
     
-    # 1. Xác định URL và Referer dựa trên chiều bay
+    # 1. Xác định URL / computerName dựa trên chiều bay
     if flight_type == "arrival":
         referer_url = "https://tia.vietnamairport.vn/arrivals-vn"
         print("\n🛬 ĐANG LẤY DỮ LIỆU CHIỀU ĐẾN (ARRIVALS) 🛬")
         flight_direction = "Arrival"
+        computer_name = "T2AOSA01A"
     elif flight_type == "departure":
         referer_url = "https://tia.vietnamairport.vn/departures-vn"
         print("\n🛫 ĐANG LẤY DỮ LIỆU CHIỀU ĐI (DEPARTURES) 🛫")
         flight_direction = "Departure"
+        computer_name = "T2AOSD01A"
     else:
         print("Loại chuyến bay không hợp lệ!")
         return pd.DataFrame()
@@ -34,13 +50,21 @@ def get_tia_flights(flight_type="arrival", max_pages=2):
 
     url_get_time = "https://tia.vietnamairport.vn/FlightSchedule/getTime"
     url_get_data = "https://tia.vietnamairport.vn/FlightSchedule/getData"
+    url_get_view = "https://tia.vietnamairport.vn/FlightSchedule/getFlightView"
 
     all_flights = []
 
     try:
-        # 2. BƯỚC MỚI CỰC QUAN TRỌNG: Truy cập trang chủ trước để Server set đúng Cookie cho Chiều đi/đến
-        session.get(referer_url) 
-        
+        # 2. Truy cập trang theo chiều bay + tải view để server khởi tạo session đúng
+        session.get(referer_url)
+        view_res = session.post(url_get_view, data={"computerName": computer_name})
+        view_dates = _extract_view_dates(view_res.text)
+
+        if not {"LastModifiedDate", "FlightViewLastModifiedDate", "FlightViewTemplateLastModifiedDate"}.issubset(view_dates):
+            raise RuntimeError(
+                f"Không trích xuất đủ LastModifiedDate từ getFlightView (flight_type={flight_type})."
+            )
+
         # 3. Khởi tạo luồng (Reset biến đếm trang)
         print("Đang khởi tạo kết nối (getTime)...")
         session.post(url_get_time)
@@ -50,11 +74,9 @@ def get_tia_flights(flight_type="arrival", max_pages=2):
             print(f"--- Lấy dữ liệu TRANG {current_page} ---")
             
             payload_data = {
-                "computerName": "T2AOSA01A",
+                "computerName": computer_name,
                 "page": current_page,
-                "LastModifiedDate": "6/22/2021 3:26:21 PM",
-                "FlightViewLastModifiedDate": "5/26/2021 8:51:25 AM",
-                "FlightViewTemplateLastModifiedDate": "6/17/2021 3:19:52 PM"
+                **view_dates,
             }
             
             response = session.post(url_get_data, data=payload_data)
