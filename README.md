@@ -14,6 +14,7 @@
 - [Tập dữ liệu huấn luyện](#tập-dữ-liệu-huấn-luyện)
 - [Triển khai](#triển-khai)
 - [Phát triển tiếp](#phát-triển-tiếp)
+- [Trang web runtime](./web/docs/WEB_PLAN.md)
 
 ---
 
@@ -227,8 +228,8 @@ Workflow `.github/workflows/collect-data.yml` chạy mỗi **30 phút**, gọi `
 - [ ] **Mở rộng sân bay**: Thêm các sân bay khác (Cần Thơ, Phú Quốc, Nha Trang...)
 - [ ] **Dữ liệu transit**: Thu thập thêm thời tiết tại các sân bay trung chuyển để cải thiện dự báo cho chuyến bay nối chuyến
 - [ ] **Cải thiện nhãn**: Sử dụng `actual_departure_time`/`actual_arrival_time` (sau khi chuyến bay hoàn thành) thay vì `estimated_time`
-- [ ] **Mô hình dự báo**: Huấn luyện mô hình hồi quy/ranking để dự báo số phút trễ cụ thể
-- [ ] **Dashboard realtime**: Hiển thị trạng thái chuyến bay và dự báo delay trực tiếp
+- [ ] **Huấn luyện mô hình**: Huấn luyện mô hình học máy (XGBoost / LightGBM / Neural Net) và xuất ra định dạng ONNX để tích hợp vào trang web
+- [ ] **Trang web runtime**: Xây dựng dashboard Next.js + Node.js worker để hiển thị kết quả dự báo realtime. Xem chi tiết tại [web/docs/WEB_PLAN.md](./web/docs/WEB_PLAN.md)
 - [ ] **Kiểm thử**: Thêm unit test cho các bước xử lý và collector
 
 ---
