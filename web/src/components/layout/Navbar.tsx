@@ -16,8 +16,8 @@ export function Navbar() {
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+      <div className="max-w-8xl mx-auto px-2 sm:px-3 lg:px-4">
+        <div className="flex items-center justify-between h-14">
           <Link href="/" className="flex items-center gap-2">
             <Plane className="w-6 h-6 text-blue-600" />
             <span className="font-bold text-lg text-gray-900">
