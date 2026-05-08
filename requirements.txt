@@ -7,3 +7,5 @@ xgboost
 lightgbm
 catboost
 optuna
+scikit-learn
+joblib
