@@ -212,7 +212,7 @@ export function FlightTable({ initialFlights }: FlightTableProps) {
           <tbody>
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={columns.length} suppressHydrationWarning className="px-4 py-8 text-center text-gray-400">
                   Không có chuyến bay nào phù hợp
                 </td>
               </tr>
@@ -234,22 +234,30 @@ export function FlightTable({ initialFlights }: FlightTableProps) {
       {/* Pagination */}
       <div className="flex items-center justify-between mt-4">
         <span className="text-sm text-gray-500">
-          Hiển thị {table.getRowModel().rows.length} / {filtered.length} chuyến bay
+          Hiển thị{' '}
+          <span suppressHydrationWarning>{table.getRowModel().rows.length}</span> /{' '}
+          <span suppressHydrationWarning>{filtered.length}</span> chuyến bay
         </span>
         <div className="flex items-center gap-2">
           <button
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
+            suppressHydrationWarning
             className="p-2 border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-sm text-gray-600">
-            Trang {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+          <span className="text-sm text-gray-600" suppressHydrationWarning>
+            Trang{' '}
+            <span suppressHydrationWarning>
+              {table.getState().pagination.pageIndex + 1}
+            </span>{' '}
+            / <span suppressHydrationWarning>{table.getPageCount()}</span>
           </span>
           <button
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
+            suppressHydrationWarning
             className="p-2 border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50"
           >
             <ChevronRight className="w-4 h-4" />
