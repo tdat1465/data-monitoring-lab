@@ -127,7 +127,7 @@ export function StatsClient({ flights }: StatsPageProps) {
     predicted > 0 ? ((delayed / predicted) * 100).toFixed(1) : '0';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <BarChart3 className="w-8 h-8 text-blue-600" />

@@ -21,7 +21,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ToastProvider>
           <DatabaseHealthChecker />
           <Navbar />
-          <main className="flex-1">{children}</main>
+          <main className="flex-1">
+            <div className="max-w-8xl mx-auto px-1 sm:px-2 lg:px-4 py-8">
+              {children}
+            </div>
+          </main>
           <Footer />
         </ToastProvider>
       </body>

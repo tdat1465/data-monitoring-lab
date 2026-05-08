@@ -46,7 +46,7 @@ export default async function FlightDetailPage({ params }: PageProps) {
           : `Trễ ${Math.round(delay)} phút`;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="space-y-6">
       <Link
         href="/flights"
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"

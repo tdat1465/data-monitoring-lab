@@ -25,29 +25,7 @@ function FlightsContent() {
   }, [date]);
 
   return (
-    <>
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-12 bg-gray-200 animate-pulse rounded-lg" />
-          ))}
-        </div>
-      ) : (
-        <FlightTable initialFlights={flights} />
-      )}
-    </>
-  );
-}
-
-export default function FlightsPage() {
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <Plane className="w-8 h-8 text-blue-600" />
@@ -63,17 +41,37 @@ export default function FlightsPage() {
         </p>
       </div>
 
-      <Suspense
-        fallback={
-          <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-12 bg-gray-200 animate-pulse rounded-lg" />
-            ))}
-          </div>
-        }
-      >
-        <FlightsContent />
-      </Suspense>
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-12 bg-gray-200 animate-pulse rounded-lg" />
+          ))}
+        </div>
+      ) : (
+        <FlightTable initialFlights={flights} />
+      )}
     </div>
+  );
+}
+
+export default function FlightsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-12 bg-gray-200 animate-pulse rounded-lg" />
+          ))}
+        </div>
+      }
+    >
+      <FlightsContent />
+    </Suspense>
   );
 }
