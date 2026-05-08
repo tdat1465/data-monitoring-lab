@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ArrowLeft, Plane, MapPin, Clock, CloudSun, Wind, Eye, History } from 'lucide-react';
 import { getFlightByKey, getFlightHistory } from '@/lib/queries/getFlightByKey';
 import { formatTime, formatDateTime } from '@/lib/utils/formatTime';
+import { formatCloudCover } from '@/lib/utils/cloudCover';
 import { delayBadgeClass } from '@/lib/utils/formatDelay';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
@@ -161,7 +162,7 @@ export default async function FlightDetailPage({ params }: PageProps) {
           </div>
           <div>
             <p className="text-xs text-gray-400">Mây</p>
-            <p className="font-medium text-sm truncate">{flight.cloud_cover ?? '—'}</p>
+            <p className="font-medium text-sm truncate">{formatCloudCover(flight.cloud_cover)}</p>
           </div>
         </CardContent>
       </Card>

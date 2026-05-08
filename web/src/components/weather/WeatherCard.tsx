@@ -1,6 +1,7 @@
 import { Wind, Thermometer, Eye, Cloud, Droplets, Compass } from 'lucide-react';
 import type { WeatherMETAR } from '@/types/weather';
 import { formatDateTime } from '@/lib/utils/formatTime';
+import { formatCloudCover } from '@/lib/utils/cloudCover';
 import { Card, CardContent } from '@/components/ui/Card';
 
 const AIRPORT_NAMES: Record<string, string> = {
@@ -80,7 +81,7 @@ export function WeatherCard({ weather }: WeatherCardProps) {
             <div>
               <p className="text-xs text-gray-400">Mây</p>
               <p className="text-xs font-medium truncate" title={weather.cloud_cover ?? ''}>
-                {weather.cloud_cover ?? '—'}
+                {formatCloudCover(weather.cloud_cover)}
               </p>
             </div>
           </div>
