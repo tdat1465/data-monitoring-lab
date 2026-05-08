@@ -110,215 +110,278 @@ Trang web cần đạt các mục tiêu sau:
 | `/api/stream` | SSE stream: real-time updates | API Route (SSE) |
 
 ---
+
 ## 3. Kiến trúc hệ thống
 
 ### 3.1. Sơ đồ kiến trúc tổng thể
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              USER'S BROWSER                                  │
+│                         IDA Data Monitoring System                           │
 │                                                                             │
-│   Next.js (Frontend)                                                         │
-│   ┌───────────────────────────────────────────────────────────────────┐    │
-│   │  Server Component (ISR) ────► HTML tĩnh (first load < 2s)        │    │
-│   │  Client Component (SSE) ────► Real-time UI update (không reload)  │    │
-│   │  TanStack Table ───────────► Bảng chuyến bay có filter/sort       │    │
-│   │  Recharts ─────────────────► Biểu đồ thống kê                   │    │
-│   └───────────────────────────────────────────────────────────────────┘    │
-└──────────────────────────────────┬──────────────────────────────────────────┘
-                                   │ HTTPS
-                                   ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        NEXT.JS (Vercel / Node server)                        │
-│                                                                             │
-│  ┌──────────────────────┐  ┌────────────────────────────────────────┐      │
-│  │  Server Components   │  │  API Routes                               │      │
-│  │  (ISR, revalidate)   │  │  GET /api/flights                        │      │
-│  │                      │  │  GET /api/flights/[key]                   │      │
-│  │  Đọc từ PostgreSQL  │  │  GET /api/weather                        │      │
-│  │  flights_predictions  │  │  GET /api/stream (SSE)                   │      │
-│  │  + current_snapshot   │  └────────────────────────────────────────┘      │
-│  └──────────────────────┘                                                  │
-└──────────────────────────────────┬──────────────────────────────────────────┘
-                                   │
-                                   ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              POSTGRESQL                                      │
-│                                                                             │
-│  flights_nb ──► flights_dn ──► flights_tsn ──► weather_metar              │
-│  flights_current_snapshot ──► flights_predictions ◄── Inference Worker     │
-│  training_dataset_labeled ──► (readonly, cho training)                       │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                      PYTHON INFERENCE WORKER                                 │
-│  Chạy trong GitHub Actions mỗi 5 phút HOẶC cron trên server               │
-│                                                                             │
-│  python src/inference.py                                                     │
-│    ├── Đọc flights_current_snapshot                                         │
-│    ├── Load delay_model_twostage.joblib                                    │
-│    ├── model.predict(df) ──► predict_delay_minutes                         │
-│    └── INSERT INTO flights_predictions ON CONFLICT UPDATE (flight_key)        │
-└─────────────────────────────────────────────────────────────────────────────┘
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────┐ │
+│  │  flights_nb  │    │  flights_dn  │    │ flights_tsn  │    │  weather │ │
+│  │   (raw)     │    │   (raw)      │    │   (raw)      │    │  _metar  │ │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘    └────┬─────┘ │
+│         └──────────────────┼──────────────────┼──────────────────┘        │
+│                            ▼                                              │
+│                   ┌────────────────┐                                     │
+│                   │  PostgreSQL    │◄──── GitHub Actions (30 phút)       │
+│                   │  Supabase      │                                     │
+│                   └───────┬────────┘                                     │
+│                           │                                              │
+│         ┌─────────────────┼─────────────────┐                          │
+│         ▼                 ▼                 ▼                          │
+│  ┌─────────────┐  ┌────────────────┐  ┌─────────────────┐              │
+│  │ processing   │  │flights_current │  │ training_dataset │              │
+│  │ .py         │─►│_snapshot      │  │ _labeled        │              │
+│  └─────────────┘  └───────┬────────┘  └─────────────────┘              │
+│                            │                                             │
+│                            ▼                                             │
+│                   ┌────────────────┐     ┌─────────────┐                 │
+│                   │ inference.py    │────►│flights_     │                 │
+│                   │                │     │predictions │                 │
+│                   └───────┬────────┘     └──────┬──────┘                 │
+│                           │                     │                          │
+└───────────────────────────┼─────────────────────┼──────────────────────────┘
+                            │                     │
+                            ▼                     ▼
+                   ┌────────────────────────────────┐
+                   │       Next.js Web App          │
+                   │                                │
+                   │  /           /flights          │
+                   │  /weather    /stats            │
+                   │  /api/*                         │
+                   └────────────────────────────────┘
 ```
 
 ### 3.2. Luồng dữ liệu end-to-end
 
 ```
-GitHub Actions / Cron (mỗi 5 phút)
-         │
-         ▼
-┌─────────────────────────────────────────────────────────┐
-│  python src/inference.py                                │
-│                                                          │
-│  ① SELECT * FROM flights_current_snapshot              │
-│  ② Load model.joblib                                   │
-│  ③ model.predict(df)                                  │
-│  ④ INSERT INTO flights_predictions                      │
-│     ON CONFLICT (flight_key) DO UPDATE                 │
-│     SET predict_delay_minutes = EXCLUDED.predict...    │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-                        ▼
-              ┌──────────────────────┐
-              │  flights_predictions │  ← Web app đọc từ đây
-              │  (flight_key PK)    │
-              └──────────┬───────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│  Next.js API Route                                      │
-│                                                          │
-│  GET /api/flights                                       │
-│    → JOIN flights_predictions + flights_current_snapshot │
-│    → Filter, sort, paginate                            │
-│    → Response: JSON array (~100-500ms)                │
-│                                                          │
-│  GET /api/stream (SSE)                                 │
-│    → Server-Sent Events                                │
-│    → Push: { flight_key, predict_delay_minutes }       │
-│    → Client cập nhật UI tức thì                       │
-└─────────────────────────────────────────────────────────┘
+Data Source ──► PostgreSQL ──► Processing ──► Inference ──► Web Dashboard
+(crawl/NOAA)     (Supabase)    (Python)     (Python)      (Next.js)
+    │                                  │
+    └──────────────────────────────────┘
+              (Database tables)
 ```
 
 ---
 
+### 3.3. Luồng dữ liệu đầy đủ (4 giai đoạn) + Latency
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  GIAI ĐOẠN 1: THU THẬP (Collect)                                              │
+│  Latency: ~30 phút (GitHub Actions cron)                                      │
+│─────────────────────────────────────────────────────────────────────────────────────│
+│                                                                                    │
+│  GitHub Actions (mỗi 30 phút)                                                    │
+│       │                                                                          │
+│       ▼                                                                          │
+│  ┌────────────────────────────────────────────────────────────────────────────┐  │
+│  │  flights_nb  │  flights_dn  │  flights_tsn  │  weather_metar                 │  │
+│  │  (Nội Bài) │  (Đà Nẵng)  │  (Tân Sơn)   │  (METAR - NOAA)              │  │
+│  └────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                    │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼  ~30 phút
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  GIAI ĐOẠN 2: XỬ LÝ (Processing) — processing.py                               │
+│  Latency: Manual / ~2-5 phút (nếu auto)                                     │
+│─────────────────────────────────────────────────────────────────────────────────────│
+│                                                                                    │
+│  Step 1: Load raw data          (17,868 flights, 3,285 weather records)            │
+│      │                                                                          │
+│      ▼                                                                          │
+│  Step 2: Normalize columns & text                                                │
+│      │  - Rename columns to snake_case                                          │
+│      │  - Map status: "Đã đến" → "landed", "Đúng giờ" → "on_time"...           │
+│      │  - Standardize flight numbers & airport codes                            │
+│      ▼                                                                          │
+│  Step 3: Parse datetime & calculate delay                                        │
+│      │  - Handle cross-day flights (late night flights)                          │
+│      │  - Calculate delay_minutes = estimated - scheduled                       │
+│      │  - Create label_delay: ≥15min = 1, <15min = 0                           │
+│      ▼                                                                          │
+│  Step 4: Create snapshots & deduplication                                        │
+│      │  - Create flight_key = source|dir|route|flight|scheduled_dt              │
+│      │  - Deduplicate by flight_key + retrieved_at_vn                          │
+│      │  - flights_current_snapshot (10,262 rows) - latest status                │
+│      │  - flights_training_snapshot (9,802 rows) - status changes only          │
+│      ▼                                                                          │
+│  Step 5: Normalize weather data                                                 │
+│      │  - Map ICAO codes: VVNB→NB, VVDN→DN, VVTS→TSN                         │
+│      │  - Coerce numeric columns (temp, wind, visibility)                       │
+│      │  - Handle variable wind direction (VRB)                                 │
+│      ▼                                                                          │
+│  Step 6: Merge weather via ASOF join                                           │
+│      │  - Match weather report closest BEFORE flight retrieval time             │
+│      │  - Tolerance: 3 hours                                                  │
+│      │  - Weather match rate: 100%                                           │
+│      ▼                                                                          │
+│  Step 7: Feature engineering                                                   │
+│      │  - Time features: hour, dayofweek, month (with cyclical encoding)       │
+│      │  - Flight features: airline_code, flight_num_only                      │
+│      │  - Weather features: visibility_bin, is_low_visibility,                │
+│      │                      temp_dew_spread                                    │
+│      │  - Fix data leakage: drop rows where snapshot_time > scheduled_time    │
+│      ▼                                                                          │
+│  OUTPUT:                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │  flights_current_snapshot (10,262 rows)                                   │ │
+│  │  training_dataset_labeled (3,358 rows)                                    │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼  ~2-5 phút
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  GIAI ĐOẠN 3: DỰ BÁO (Inference) — inference.py                               │
+│  Latency: ~5-30 giây (phụ thuộc số lượng flights)                          │
+│─────────────────────────────────────────────────────────────────────────────────────│
+│                                                                                    │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │  Load: flights_current_snapshot                                          │ │
+│  └─────────────────────────────┬────────────────────────────────────────────┘ │
+│                                │                                               │
+│                                ▼                                               │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │  Load Model: delay_model_twostage.joblib                                  │ │
+│  │  Two-Stage Pipeline:                                                     │ │
+│  │    Stage 1: Classifier (delay vs on-time)                               │ │
+│  │    Stage 2: Regressor (predict minutes)                                 │ │
+│  └─────────────────────────────┬────────────────────────────────────────────┘ │
+│                                │                                               │
+│                                ▼                                               │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │  model.predict(X) ──► predict_delay_minutes                              │ │
+│  └─────────────────────────────┬────────────────────────────────────────────┘ │
+│                                │                                               │
+│                                ▼                                               │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │  INSERT ON CONFLICT UPDATE: flights_predictions                          │ │
+│  │  │                                                                          │ │
+│  │  │  ⏱️ ~0ms (internal PostgreSQL)                                       │ │
+│  │  │                                                                          │ │
+│  │  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │  │  PostgreSQL TRIGGER fires → pg_notify('prediction_update', ...)    │ │ │
+│  │  │  │     ⏱️ ~0ms (same transaction)                                      │ │ │
+│  │  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼  ~0ms (NOTIFY)
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  GIAI ĐOẠN 4: HIỂN THỊ (Web) — Next.js + SSE                                 │
+│  Latency: ~50ms - 26 giây (real-time với short listen pattern)              │
+│─────────────────────────────────────────────────────────────────────────────────────│
+│                                                                                    │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │  SSE Endpoint (/api/stream)                                              │ │
+│  │  │                                                                          │ │
+│  │  │  DbListener receives pg_notify()                                        │ │
+│  │  │  ⏱️ ~0ms                                                               │ │
+│  │  │                                                                          │ │
+│  │  ▼                                                                          │ │
+│  │  controller.enqueue() ──► SSE event: notification                        │ │
+│  │  ⏱️ ~0-25ms (network latency)                                            │ │
+│  └─────────────────────────────┬────────────────────────────────────────────┘ │
+│                                │                                               │
+│                                ▼                                               │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │  Client (useSSE hook)                                                    │ │
+│  │  │                                                                          │ │
+│  │  │  onNotification callback triggered                                    │ │
+│  │  │  ⏱️ ~16ms (React re-render)                                          │ │
+│  │  │                                                                          │ │
+│  │  ▼                                                                          │ │
+│  │  setState() ──► UI updates                                               │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                    │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │  SHORT LISTEN PATTERN (Option B) — Serverless Compatible                 │ │
+│  │                                                                          │ │
+│  │  Listen 25s ──► Reconnect 1s ──► Listen 25s ──► Reconnect 2s ──► ... │ │
+│  │       │              │              │              │                    │ │
+│  │       │              │              │              │                    │ │
+│  │       └──────────────┴──────────────┴──────────────┘                    │ │
+│  │                    Auto-reconnect (exponential backoff)                   │ │
+│  │                                                                          │ │
+│  │  ✓ Best case latency:  ~50ms (NOTIFY → UI update)                       │ │
+│  │  ✓ Worst case latency: ~26 giây (vừa reconnect xong)                 │ │
+│  │  ✓ Average latency:     ~0-2 giây                                       │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Latency Summary:**
+
+| Giai đoạn | Thành phần | Best Case | Worst Case | Average |
+|-----------|------------|-----------|------------|---------|
+| 1. Thu thập | GitHub Actions → DB | 30 phút | 30 phút | 30 phút |
+| 2. Xử lý | processing.py → DB | Manual | ~5 phút | Manual |
+| 3. Dự báo | inference.py → DB | ~5 giây | ~30 giây | ~10 giây |
+| 4. Hiển thị | NOTIFY → UI | ~50ms | ~26 giây | ~0-2 giây |
+| **Tổng (sau crawl)** | Raw → UI | **~10 giây** | **~5 phút** | **~2-3 phút** |
+
+**So sánh: Trước vs Sau khi có SSE**
+
+| Metric | Trước (ISR) | Sau (SSE + LISTEN/NOTIFY) |
+|--------|-------------|---------------------------|
+| Latency Inference → UI | 60-180 giây | ~50ms - 26 giây |
+| Cơ chế | Cache refresh | Real-time push |
+| Tương thích serverless | ✅ | ✅ (short listen) |
+
+**Training Dataset Stats:**
+
+| Sân bay | Mẫu | Delay rate | Avg delay |
+|---------|------|------------|-----------|
+| DN (Đà Nẵng) | 3,145 | 0.45% | 0.49 phút |
+| NB (Nội Bài) | 138 | 10.14% | -18.66 phút (sớm!) |
+| TSN (Tân Sơn) | 75 | 32.00% | 6.69 phút |
+
+**Trạng thái hiện tại từng giai đoạn:**
+
+| Giai đoạn | Trạng thái | Tự động? |
+|-----------|-----------|---------|
+| 1. Thu thập (collect) | Hoạt động | GitHub Actions mỗi 30 phút |
+| 2. Xử lý (processing) | Có code | Chạy thủ công |
+| 3. Dự báo (inference) | Có code | Chạy thủ công |
+| 4. Hiển thị (web) | Hoạt động | Next.js |
+
+**Thứ tự chạy để cập nhật dữ liệu:**
+
+```bash
+# 1. GitHub Actions tự động crawl dữ liệu (mỗi 30 phút)
+#    → flights_nb, flights_dn, flights_tsn, weather_metar
+
+# 2. Chạy processing để tạo snapshot
+python src/processing.py
+#    → flights_current_snapshot, training_dataset_labeled
+
+# 3. Chạy inference để tạo predictions
+python src/inference.py
+#    → flights_predictions
+
+# 4. Dashboard tự động hiển thị dữ liệu mới
+```
+
+---
 
 ## 4. Cấu trúc thư mục
 
-```
-web/
-├── docs/
-│   └── PLAN.md               ← File plan này
-│
-├── src/
-│   │
-│   ├── app/                 # Next.js App Router
-│   │   ├── layout.tsx       # Root layout (navbar, footer)
-│   │   ├── page.tsx         # Dashboard tổng quan (/)
-│   │   ├── globals.css      # Global styles (Tailwind)
-│   │   │
-│   │   ├── flights/
-│   │   │   ├── page.tsx     # Danh sách chuyến bay (/flights)
-│   │   │   └── [flightKey]/
-│   │   │       └── page.tsx # Chi tiết chuyến bay (/flights/:key)
-│   │   │
-│   │   ├── weather/
-│   │   │   └── page.tsx     # Thời tiết realtime (/weather)
-│   │   │
-│   │   ├── stats/
-│   │   │   └── page.tsx     # Thống kê & biểu đồ (/stats)
-│   │   │
-│   │   └── api/
-│   │       ├── flights/
-│   │       │   ├── route.ts     # GET /api/flights
-│   │       │   └── [flightKey]/
-│   │       │       └── route.ts # GET /api/flights/:key
-│   │       ├── weather/
-│   │       │   └── route.ts     # GET /api/weather
-│   │       └── stream/
-│   │           └── route.ts     # GET /api/stream (SSE)
-│   │
-│   ├── components/           # React components
-│   │   ├── ui/              # Primitive UI (Button, Card, Badge...)
-│   │   │   ├── Button.tsx
-│   │   │   ├── Card.tsx
-│   │   │   ├── Badge.tsx
-│   │   │   ├── Input.tsx
-│   │   │   ├── Select.tsx
-│   │   │   ├── Table.tsx    # TanStack Table wrapper
-│   │   │   └── Skeleton.tsx # Loading skeleton
-│   │   │
-│   │   ├── flights/         # Domain-specific components
-│   │   │   ├── FlightTable.tsx     # Bảng chuyến bay (Server)
-│   │   │   ├── FlightCard.tsx      # Card cho mobile
-│   │   │   ├── FlightSearch.tsx    # Search box
-│   │   │   ├── FlightFilter.tsx    # Filter panel
-│   │   │   ├── FlightTimeline.tsx  # Timeline trạng thái
-│   │   │   └── PredictionBadge.tsx # Badge hiển thị delay
-│   │   │
-│   │   ├── weather/
-│   │   │   ├── WeatherCard.tsx     # Card thời tiết 1 sân bay
-│   │   │   └── WeatherGrid.tsx     # Lưới 3 card
-│   │   │
-│   │   ├── stats/
-│   │   │   ├── DelayRateChart.tsx      # Pie chart tỷ lệ delay
-│   │   │   ├── FlightsByHourChart.tsx   # Bar chart theo giờ
-│   │   │   └── DelayDistributionChart.tsx # Histogram
-│   │   │
-│   │   └── layout/
-│   │       ├── Navbar.tsx
-│   │       └── Footer.tsx
-│   │
-│   ├── lib/                 # Shared utilities
-│   │   ├── db.ts           # PostgreSQL client (pg)
-│   │   ├── eventEmitter.ts  # Node.js EventEmitter (SSE broadcast)
-│   │   │
-│   │   ├── queries/
-│   │   │   ├── getFlights.ts   # Đọc flights_predictions + current_snapshot
-│   │   │   ├── getFlightByKey.ts
-│   │   │   └── getWeather.ts   # Đọc weather_metar mới nhất
-│   │   │
-│   │   └── utils/
-│   │       ├── formatTime.ts
-│   │       ├── formatDelay.ts  # Format phút delay → "Trễ 15 phút"
-│   │       └── delayColor.ts   # Màu sắc theo mức độ delay
-│   │
-│   ├── types/               # TypeScript type definitions
-│   │   ├── flight.ts        # Flight, FlightSnapshot, FlightWithPrediction
-│   │   ├── weather.ts       # WeatherMETAR
-│   │   └── api.ts           # API response types
-│   │
-│   └── hooks/               # React hooks
-│       ├── useFlights.ts    # Fetch flights data
-│       ├── useWeather.ts     # Fetch weather data
-│       ├── useSSE.ts        # Kết nối SSE, nhận real-time updates
-│       └── useFilter.ts     # Quản lý filter state
-│
-├── tests/                   # Unit + integration tests
-│   ├── unit/
-│   │   ├── formatDelay.test.ts
-│   │   └── delayColor.test.ts
-│   ├── integration/
-│   │   └── api-flights.test.ts
-│   └── e2e/
-│       └── dashboard.test.ts # Playwright E2E
-│
-├── .env.example             # Template biến môi trường
-├── package.json
-├── tsconfig.json
-├── next.config.js
-├── tailwind.config.ts
-├── Dockerfile               # Container cho Next.js web app
-└── vercel.json             # Config cho Vercel deployment
+Thư mục `web/` chứa toàn bộ mã nguồn Next.js cho ứng dụng web.
 
-# Inference Worker: Dùng lại Python scripts có sẵn
-# ├── src/inference.py     ← Đã có, ghi vào flights_predictions
-# ├── src/processing.py    ← Đã có, tạo flights_current_snapshot
-# ├── Data Modeling/
-# │   └── artifacts/
-# │       └── delay_model_twostage.joblib  ← Đã có
-```
+Cấu trúc chính:
+- `docs/PLAN.md` — File plan này
+- `src/app/` — Next.js App Router với các trang và API routes
+- `src/components/` — React components (UI primitives và domain-specific components)
+- `src/lib/` — Shared utilities (database queries, utilities)
+- `src/types/` — TypeScript type definitions
+- `src/hooks/` — React hooks (useFlights, useWeather, useSSE)
+- `tests/` — Unit, integration, và E2E tests
+
+Inference Worker sử dụng lại các scripts Python có sẵn: `src/inference.py`, `src/processing.py`, và model tại `Data Modeling/artifacts/delay_model_twostage.joblib`.
 
 ---
 
@@ -326,101 +389,26 @@ web/
 
 ### 5.1. Các bảng hiện có (từ ida-data-monitoring)
 
-```sql
--- Bảng chuyến bay sân bay Nội Bài
-CREATE TABLE flights_nb (
-    id SERIAL PRIMARY KEY,
-    data_retrieved_at_vn TIMESTAMPTZ DEFAULT NOW(),
-    flight_date DATE NOT NULL,
-    direction TEXT,
-    scheduled_time TIME,
-    estimated_time TIME,
-    airport TEXT,
-    flight_number TEXT,
-    status TEXT,
-    UNIQUE(flight_date, direction, scheduled_time, airport, flight_number, status)
-);
--- Tương tự cho flights_dn, flights_tsn
+Hệ thống hiện tại bao gồm các bảng sau:
 
--- Bảng thời tiết METAR
-CREATE TABLE weather_metar (
-    id SERIAL PRIMARY KEY,
-    icao_code TEXT,           -- 'VVNB' | 'VVDN' | 'VVTS'
-    report_time_utc TIMESTAMPTZ,
-    report_time_vn TIMESTAMPTZ,
-    temperature_c NUMERIC,
-    dew_point_c NUMERIC,
-    wind_direction_deg NUMERIC,
-    wind_speed_kt NUMERIC,
-    visibility_miles NUMERIC,
-    cloud_cover TEXT,
-    raw_metar TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(icao_code, report_time_utc, raw_metar)
-);
-
--- Snapshot chuyến bay mới nhất (tạo bởi src/processing.py)
-CREATE TABLE flights_current_snapshot (
-    flight_key TEXT PRIMARY KEY,
-    retrieved_at_vn TIMESTAMPTZ,
-    flight_date DATE,
-    direction TEXT,
-    scheduled_time TIME,
-    estimated_time TIME,
-    route_airport_std TEXT,
-    flight_number TEXT,
-    status_raw TEXT,
-    status_group TEXT,
-    source_airport TEXT,
-    scheduled_dt TIMESTAMPTZ,
-    estimated_dt TIMESTAMPTZ,
-    delay_minutes NUMERIC,
-    label_delay INTEGER,
-    temperature_c NUMERIC,
-    dew_point_c NUMERIC,
-    wind_direction_deg NUMERIC,
-    wind_speed_kt NUMERIC,
-    visibility_miles NUMERIC,
-    cloud_cover TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
+- **Bảng chuyến bay theo sân bay:** `flights_nb`, `flights_dn`, `flights_tsn` — lưu dữ liệu thô từ các trang web sân bay
+- **Bảng thời tiết:** `weather_metar` — lưu dữ liệu METAR từ NOAA
+- **Bảng snapshot:** `flights_current_snapshot` — bản ghi mới nhất của mỗi chuyến bay với features đã chuẩn hóa
+- **Bảng training:** `training_dataset_labeled` — dữ liệu đã gán nhãn cho huấn luyện model
 
 ### 5.2. Bảng predictions (đã tồn tại)
 
-```sql
--- Tạo bởi src/inference.py — bảng này DA TON TAI trong DB
--- Web app chi can SELECT tu bang nay
+Bảng `flights_predictions` được tạo bởi `src/inference.py` — bảng này đã tồn tại trong DB. Web app chỉ cần SELECT từ bảng này.
 
-CREATE TABLE flights_predictions (
-    flight_key TEXT PRIMARY KEY REFERENCES flights_current_snapshot(flight_key),
-    predict_delay_minutes NUMERIC,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Nen bo sung them:
-ALTER TABLE flights_predictions
-    ADD COLUMN IF NOT EXISTS model_version TEXT,
-    ADD COLUMN IF NOT EXISTS predicted_at TIMESTAMPTZ DEFAULT NOW();
-```
+Cấu trúc bảng:
+- `flight_key TEXT PRIMARY KEY` — khóa ghép từ thông tin chuyến bay
+- `predict_delay_minutes NUMERIC` — số phút dự đoán delay
+- `model_version TEXT` — phiên bản model đã sử dụng
+- `predicted_at TIMESTAMPTZ` — thời điểm dự đoán
 
 ### 5.3. ERD web app
 
-```
-flights_nb/dn/tsn --> flights_current_snapshot
-                            |
-                            v
-              +-----------------------+
-              |  flights_predictions    | <-- Web app doc tu day
-              |  (flight_key PK)      |     JOIN flights_current_snapshot
-              +-----------------------+
-                            |
-                            v
-              +-----------------------+
-              |  weather_metar          | <-- Lay thoi tiet moi nhat
-              |  (3 san bay)         |
-              +-----------------------+
-```
+
 
 ---
 
@@ -428,127 +416,29 @@ flights_nb/dn/tsn --> flights_current_snapshot
 
 ### 6.1. Ket noi PostgreSQL
 
-```typescript
-// src/lib/db.ts
-import pg from 'pg';
-
-const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
-
-export async function query<T = any>(text: string, params?: any[]): Promise<pg.QueryResult<T>> {
-  return pool.query(text, params);
-}
-```
+Kết nối PostgreSQL sử dụng thư viện `pg` với connection pooling. Cấu hình:
+- Số connection tối đa: 20
+- Idle timeout: 30 giây
+- Connection timeout: 2 giây
 
 ### 6.2. Query: danh sach chuyen bay + predictions
 
-```typescript
-// src/lib/queries/getFlights.ts
-import { query } from '@/lib/db';
-
-export async function getFlightsWithPredictions(date?: string) {
-  const targetDate = date ?? new Date().toISOString().split('T')[0];
-
-  const sql = `
-    SELECT
-      s.flight_key,
-      s.flight_number,
-      s.source_airport,
-      s.direction,
-      s.route_airport_std,
-      s.scheduled_dt AT TIME ZONE 'Asia/Ho_Chi_Minh' AS scheduled_dt,
-      s.estimated_dt,
-      s.status_raw,
-      s.status_group,
-      s.temperature_c,
-      s.visibility_miles,
-      s.wind_speed_kt,
-      s.cloud_cover,
-      p.predict_delay_minutes,
-      p.predicted_at
-    FROM flights_current_snapshot s
-    LEFT JOIN flights_predictions p ON s.flight_key = p.flight_key
-    WHERE s.flight_date = $1
-      AND s.status_group NOT IN ('landed', 'departed', 'cancelled')
-    ORDER BY s.scheduled_dt ASC
-  `;
-
-  const result = await query(sql, [targetDate]);
-  return result.rows;
-}
-```
+Query này lấy danh sách chuyến bay hôm nay kèm dự đoán, bao gồm:
+- Thông tin chuyến bay từ `flights_current_snapshot`
+- Dự đoán từ `flights_predictions`
+- Thời tiết liên quan (temperature, visibility, wind, cloud)
+- Filter: chỉ lấy active flights (không bao gồm đã hạ cánh, đã cất cánh, đã hủy)
 
 ### 6.3. Query: thoi tiet moi nhat
 
-```typescript
-// src/lib/queries/getWeather.ts
-import { query } from '@/lib/db';
-
-export async function getLatestWeather() {
-  const sql = `
-    SELECT DISTINCT ON (icao_code)
-      icao_code,
-      report_time_vn AT TIME ZONE 'Asia/Ho_Chi_Minh' AS report_time_vn,
-      temperature_c,
-      dew_point_c,
-      wind_direction_deg,
-      wind_speed_kt,
-      visibility_miles,
-      cloud_cover,
-      raw_metar
-    FROM weather_metar
-    ORDER BY icao_code, report_time_vn DESC
-  `;
-  const result = await query(sql);
-  return result.rows;
-}
-```
+Query lấy thời tiết mới nhất cho 3 sân bay (VVNB, VVDN, VVTS) từ bảng `weather_metar`.
 
 ### 6.4. Query: chi tiet 1 chuyen bay
 
-```typescript
-// src/lib/queries/getFlightByKey.ts
-import { query } from '@/lib/db';
-
-export async function getFlightByKey(flightKey: string) {
-  const sql = `
-    SELECT
-      s.flight_key, s.flight_number, s.source_airport, s.direction,
-      s.route_airport_std, s.scheduled_dt AT TIME ZONE 'Asia/Ho_Chi_Minh' AS scheduled_dt,
-      s.estimated_dt, s.status_raw, s.status_group,
-      s.temperature_c, s.visibility_miles, s.wind_speed_kt, s.cloud_cover,
-      p.predict_delay_minutes, p.predicted_at
-    FROM flights_current_snapshot s
-    LEFT JOIN flights_predictions p ON s.flight_key = p.flight_key
-    WHERE s.flight_key = $1
-  `;
-  const result = await query(sql, [flightKey]);
-  return result.rows[0] ?? null;
-}
-
-export async function getFlightHistory(flightKey: string) {
-  const parts = flightKey.split('|');
-  const source = parts[0];
-  const tableMap = { NB: 'flights_nb', DN: 'flights_dn', TSN: 'flights_tsn' };
-  const table = tableMap[source as keyof typeof tableMap];
-  const flight_number = parts[2];
-
-  const sql = `
-    SELECT
-      data_retrieved_at_vn AT TIME ZONE 'Asia/Ho_Chi_Minh' AS retrieved_at_vn,
-      scheduled_time, estimated_time, status
-    FROM ${table}
-    WHERE flight_number = $1
-    ORDER BY data_retrieved_at_vn ASC
-  `;
-  const result = await query(sql, [flight_number]);
-  return result.rows;
-}
-```
+Query lấy chi tiết một chuyến bay theo `flight_key`, bao gồm:
+- Thông tin chuyến bay hiện tại
+- Dự đoán delay
+- Lịch sử trạng thái từ bảng gốc (flights_nb/dn/tsn)
 
 ---
 
@@ -556,61 +446,30 @@ export async function getFlightHistory(flightKey: string) {
 
 ### 7.1. Tong quan
 
-Inference worker la script Python da co san: **src/inference.py**. Script nay:
+Inference worker là script Python đã có sẵn: **src/inference.py**. Script này:
 
-1. Doc flights_current_snapshot tu PostgreSQL
-2. Load model delay_model_twostage.joblib
-3. Chay model.predict() cho tat ca active flights
-4. Ghi ket qua vao bang flights_predictions (INSERT ON CONFLICT UPDATE)
+1. Đọc `flights_current_snapshot` từ PostgreSQL
+2. Load model `delay_model_twostage.joblib`
+3. Chạy `model.predict()` cho tất cả active flights
+4. Ghi kết quả vào bảng `flights_predictions` (INSERT ON CONFLICT UPDATE)
 
-**Luu y:** Khong can goi NOTIFY thu cong. PostgreSQL trigger (section 10.3.1) se auto-NOTIFY `prediction_update` channel ngay khi co INSERT/UPDATE. Chi can dam bao migration da chay la du.
+**Luu y:** Không cần gọi NOTIFY thủ công. PostgreSQL trigger (section 10.3.1) sẽ auto-NOTIFY `prediction_update` channel ngay khi có INSERT/UPDATE.
 
-Khong can viet lai logic inference. Chi can goi script qua subprocess tu cron/GitHub Actions.
+Không cần viết lại logic inference. Chỉ cần gọi script qua subprocess từ cron/GitHub Actions.
 
 ### 7.2. Two-Stage Model (da hieu)
 
-Model delay_model_twostage la sklearn Pipeline voi 2 stage:
+Model `delay_model_twostage` là sklearn Pipeline với 2 stage:
 
-```
-Stage 1: Classifier (du doan CO tre hay KHONG)
-  -> predict_proba() -> xac suat delay
 
-Stage 2: Regressor (du doan SO PHUT tre, chi khi Stage 1 = 1)
-  -> predict() -> so phut delay
-```
 
-Khi goi model.predict(X), sklearn tu handle ca 2 stage. Ket qua tra ve la so phut delay.
+Khi gọi `model.predict(X)`, sklearn tự handle cả 2 stage. Kết quả trả về là số phút delay.
 
 ### 7.3. Chay inference tu cron
 
-```bash
-# Tren server hoac GitHub Actions
-# Moi 5 phut
-*/5 * * * * cd /path/to/ida-data-monitoring && python src/inference.py >> logs/inference.log 2>&1
-```
-
-```yaml
-# GitHub Actions workflow
-# .github/workflows/predict.yml
-name: Run Prediction
-
-on:
-  schedule:
-    - cron: '*/5 * * * *'
-
-jobs:
-  predict:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install pandas scikit-learn joblib psycopg2-binary
-      - run: python src/inference.py
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-```
+Inference worker có thể chạy từ:
+- Cron trên server mỗi 5 phút
+- GitHub Actions với schedule `*/5 * * * *`
 
 ---
 
@@ -618,135 +477,33 @@ jobs:
 
 ### 8.1. GET /api/flights
 
-```typescript
-// src/app/api/flights/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { getFlightsWithPredictions } from '@/lib/queries/getFlights';
+API trả về danh sách chuyến bay với các tham số:
+- `date` — ngày cần tra cứu (mặc định: hôm nay)
+- `source` — lọc theo sân bay gốc (NB, DN, TSN)
+- `direction` — lọc theo hướng bay (Arrival, Departure)
+- `status` — lọc theo trạng thái
+- `search` — tìm kiếm theo mã chuyến bay
+- `sortBy`, `sortOrder` — sắp xếp
+- `page`, `limit` — phân trang
 
-export async function GET(req: NextRequest) {
-  const searchParams = req.nextUrl.searchParams;
-  const date = searchParams.get('date') ?? new Date().toISOString().split('T')[0];
-  const source = searchParams.get('source');
-  const direction = searchParams.get('direction');
-  const search = searchParams.get('search');
-  const status = searchParams.get('status');
-  const sortBy = searchParams.get('sortBy') ?? 'scheduled_dt';
-  const sortOrder = searchParams.get('sortOrder') ?? 'asc';
-  const page = parseInt(searchParams.get('page') ?? '1');
-  const limit = parseInt(searchParams.get('limit') ?? '50');
-
-  try {
-    let flights = await getFlightsWithPredictions(date);
-
-    if (source) flights = flights.filter(f => f.source_airport === source);
-    if (direction) flights = flights.filter(f => f.direction === direction);
-    if (status) flights = flights.filter(f => f.status_group === status);
-    if (search) flights = flights.filter(f =>
-      f.flight_number.toLowerCase().includes(search.toLowerCase())
-    );
-
-    flights.sort((a, b) => {
-      const aVal = a[sortBy as keyof typeof a];
-      const bVal = b[sortBy as keyof typeof b];
-      if (aVal == null) return 1;
-      if (bVal == null) return -1;
-      return sortOrder === 'asc' ? (aVal < bVal ? -1 : 1) : (aVal > bVal ? -1 : 1);
-    });
-
-    const total = flights.length;
-    const offset = (page - 1) * limit;
-    const paginated = flights.slice(offset, offset + limit);
-
-    return NextResponse.json({
-      data: paginated,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit),
-              last_updated: flights[0]?.predicted_at ?? null }
-    }, {
-      headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' }
-    });
-
-  } catch (error) {
-    console.error('[API /flights]', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-```
+Response bao gồm:
+- `data` — mảng chuyến bay
+- `meta` — thông tin phân trang và thời gian cập nhật cuối
 
 ### 8.2. GET /api/flights/[flightKey]
 
-```typescript
-// src/app/api/flights/[flightKey]/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { getFlightByKey, getFlightHistory } from '@/lib/queries/getFlightByKey';
-
-export async function GET(req: NextRequest, { params }: { params: { flightKey: string } }) {
-  try {
-    const flight = await getFlightByKey(params.flightKey);
-    if (!flight) return NextResponse.json({ error: 'Flight not found' }, { status: 404 });
-    const history = await getFlightHistory(params.flightKey);
-    return NextResponse.json({ ...flight, history });
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-```
+API trả về chi tiết một chuyến bay theo `flightKey`, bao gồm lịch sử trạng thái.
 
 ### 8.3. GET /api/weather
 
-```typescript
-// src/app/api/weather/route.ts
-import { NextResponse } from 'next/server';
-import { getLatestWeather } from '@/lib/queries/getWeather';
-
-export async function GET() {
-  try {
-    const weather = await getLatestWeather();
-    return NextResponse.json({
-      data: weather,
-      meta: { count: weather.length, last_updated: weather[0]?.report_time_vn ?? null }
-    }, {
-      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' }
-    });
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-```
+API trả về thời tiết mới nhất của 3 sân bay.
 
 ### 8.4. Response schema
 
-```typescript
-// src/types/flight.ts
-
-interface FlightWithPrediction {
-  flight_key: string;
-  flight_number: string;
-  source_airport: 'NB' | 'DN' | 'TSN';
-  direction: 'Arrival' | 'Departure';
-  route_airport_std: string;
-  scheduled_dt: string;
-  estimated_dt: string | null;
-  status_raw: string;
-  status_group: string;
-  temperature_c: number | null;
-  visibility_miles: number | null;
-  wind_speed_kt: number | null;
-  cloud_cover: string | null;
-  predict_delay_minutes: number | null;
-  predicted_at: string | null;
-}
-
-interface FlightDetailResponse extends FlightWithPrediction {
-  history: FlightStatusHistory[];
-}
-
-interface FlightStatusHistory {
-  retrieved_at_vn: string;
-  scheduled_time: string;
-  estimated_time: string | null;
-  status: string;
-}
-```
+Response có cấu trúc `FlightWithPrediction` với các trường:
+- Thông tin chuyến bay: `flight_key`, `flight_number`, `source_airport`, `direction`, `route_airport_std`, `scheduled_dt`, `estimated_dt`, `status_raw`, `status_group`
+- Thời tiết: `temperature_c`, `visibility_miles`, `wind_speed_kt`, `cloud_cover`
+- Dự đoán: `predict_delay_minutes`, `predicted_at`
 
 ---
 
@@ -754,279 +511,33 @@ interface FlightStatusHistory {
 
 ### 9.1. Root Layout
 
-```tsx
-// src/app/layout.tsx
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
-
-const inter = Inter({ subsets: ['latin', 'vietnamese'] });
-
-export const metadata: Metadata = {
-  title: 'Flight Delay Monitor - Du bao tre chuyen bay Viet Nam',
-  description: 'Theo doi va du bao do tre chuyen bay tai 3 san bay lon nhat Viet Nam.',
-};
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="vi">
-      <body className={inter.className}>
-        <Navbar />
-        <main className="min-h-screen bg-gray-50">{children}</main>
-        <Footer />
-      </body>
-    </html>
-  );
-}
-```
+Root layout bao gồm:
+- Font Inter (hỗ trợ tiếng Việt)
+- Navbar và Footer
+- Metadata cho SEO
 
 ### 9.2. Dashboard Page (Server Component + ISR)
 
-```tsx
-// src/app/page.tsx
-import { Suspense } from 'react';
-import { getFlightsWithPredictions } from '@/lib/queries/getFlights';
-import { getLatestWeather } from '@/lib/queries/getWeather';
-import { FlightTable } from '@/components/flights/FlightTable';
-import { WeatherGrid } from '@/components/weather/WeatherGrid';
-import { SSEProvider } from '@/hooks/useSSE';
-
-export const revalidate = 300; // ISR: revalidate moi 5 phut
-
-export default async function DashboardPage() {
-  const [flights, weather] = await Promise.all([
-    getFlightsWithPredictions(),
-    getLatestWeather(),
-  ]);
-
-  const delayRate = flights.length > 0
-    ? (flights.filter(f => (f.predict_delay_minutes ?? 0) >= 15).length / flights.length * 100).toFixed(1)
-    : '0';
-
-  return (
-    <SSEProvider>
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Theo doi chuyen bay</h1>
-          <p className="text-gray-500 mt-1">
-            Cap nhat: {new Date().toLocaleString('vi-VN')}
-          </p>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
-          <StatCard label="Tong chuyen" value={flights.length} />
-          <StatCard label="Tre (>=15p)" value={flights.filter(f => (f.predict_delay_minutes ?? 0) >= 15).length} color="red" />
-          <StatCard label="Dung gio" value={flights.filter(f => (f.predict_delay_minutes ?? 0) < 15).length} color="green" />
-          <StatCard label="Ty le tre" value={`${delayRate}%`} color={parseFloat(delayRate) > 30 ? 'red' : 'yellow'} />
-        </div>
-
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Thoi tiet hien tai</h2>
-          <WeatherGrid weather={weather} />
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold mb-4">Danh sach chuyen bay hom nay</h2>
-          <Suspense fallback={<div>Dang tai...</div>}>
-            <FlightTable initialFlights={flights} />
-          </Suspense>
-        </section>
-      </div>
-    </SSEProvider>
-  );
-}
-
-function StatCard({ label, value, color = 'gray' }: { label: string; value: number | string; color?: string }) {
-  const colors: Record<string, string> = {
-    gray: 'bg-gray-100 text-gray-800',
-    green: 'bg-green-100 text-green-800',
-    red: 'bg-red-100 text-red-800',
-    yellow: 'bg-yellow-100 text-yellow-800',
-  };
-  return (
-    <div className={`rounded-lg p-4 ${colors[color]}`}>
-      <div className="text-sm">{label}</div>
-      <div className="text-2xl font-bold">{value}</div>
-    </div>
-  );
-}
-```
+Trang chủ sử dụng ISR với `revalidate = 300` (5 phút):
+- Hiển thị thống kê tổng quan (tổng chuyến, chuyến trễ, tỷ lệ trễ)
+- Hiển thị thời tiết 3 sân bay
+- Hiển thị danh sách chuyến bay với filter/sort
 
 ### 9.3. FlightTable voi TanStack Table
 
-```tsx
-// src/components/flights/FlightTable.tsx
-'use client';
-
-import { useState, useMemo } from 'react';
-import {
-  useReactTable, getCoreRowModel, getSortedRowModel,
-  getPaginationRowModel, flexRender, ColumnDef, SortingState,
-} from '@tanstack/react-table';
-import { FlightWithPrediction } from '@/types/flight';
-import { PredictionBadge } from './PredictionBadge';
-
-const AIRPORT_NAMES: Record<string, string> = {
-  NB: 'Noi Bai', DN: 'Da Nang', TSN: 'Tan Son Nhat',
-};
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-}
-
-export function FlightTable({ initialFlights }: { initialFlights: FlightWithPrediction[] }) {
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'scheduled_dt', desc: false }]);
-  const [filters, setFilters] = useState({ source: '', direction: '', status: '', search: '' });
-
-  const { flights } = useFlights(initialFlights);
-
-  const columns = useMemo<ColumnDef<FlightWithPrediction>[]>(() => [
-    {
-      accessorKey: 'flight_number',
-      header: 'Ma CB',
-      cell: ({ row }) => (
-        <a href={`/flights/${row.original.flight_key}`}
-           className="font-mono font-bold text-blue-600 hover:underline">
-          {row.original.flight_number}
-        </a>
-      ),
-    },
-    {
-      accessorKey: 'source_airport',
-      header: 'San bay',
-      cell: ({ row }) => AIRPORT_NAMES[row.original.source_airport] ?? row.original.source_airport,
-    },
-    { accessorKey: 'direction', header: 'Chieu' },
-    { accessorKey: 'route_airport_std', header: 'Diem den' },
-    {
-      accessorKey: 'scheduled_dt',
-      header: 'Gio bay',
-      cell: ({ row }) => formatTime(row.original.scheduled_dt),
-    },
-    { accessorKey: 'status_group', header: 'Trang thai' },
-    {
-      accessorKey: 'predict_delay_minutes',
-      header: 'Du bao',
-      cell: ({ row }) => (
-        <PredictionBadge delayMinutes={row.original.predict_delay_minutes ?? 0} />
-      ),
-    },
-    {
-      accessorKey: 'visibility_miles',
-      header: 'Tam nhin',
-      cell: ({ row }) => row.original.visibility_miles ? `${row.original.visibility_miles} mi` : '-',
-    },
-  ], []);
-
-  const filtered = useMemo(() => flights.filter(f => {
-    if (filters.source && f.source_airport !== filters.source) return false;
-    if (filters.direction && f.direction !== filters.direction) return false;
-    if (filters.status && f.status_group !== filters.status) return false;
-    if (filters.search && !f.flight_number.toLowerCase().includes(filters.search.toLowerCase())) return false;
-    return true;
-  }), [flights, filters]);
-
-  const table = useReactTable({
-    data: filtered, columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-  });
-
-  return (
-    <div>
-      <div className="flex gap-3 mb-4">
-        <input
-          placeholder="Tim ma chuyen bay..."
-          className="border rounded px-3 py-1 text-sm"
-          onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-        />
-        <select onChange={e => setFilters(f => ({ ...f, source: e.target.value }))}>
-          <option value="">Tat ca san bay</option>
-          <option value="NB">Noi Bai</option>
-          <option value="DN">Da Nang</option>
-          <option value="TSN">Tan Son Nhat</option>
-        </select>
-        <select onChange={e => setFilters(f => ({ ...f, direction: e.target.value }))}>
-          <option value="">Chieu</option>
-          <option value="Arrival">Den</option>
-          <option value="Departure">Di</option>
-        </select>
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100">
-            {table.getHeaderGroups().map(hg => (
-              <tr key={hg.id}>
-                {hg.headers.map(header => (
-                  <th key={header.id}
-                      className="px-4 py-3 text-left font-medium cursor-pointer"
-                      onClick={header.column.getToggleSortingHandler()}>
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    {{ asc: ' ^', desc: ' v' }[header.column.getIsSorted() as string] ?? ''}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.map(row => (
-              <tr key={row.id} className="border-t hover:bg-gray-50">
-                {row.getVisibleCells().map(cell => (
-                  <td key={cell.id} className="px-4 py-3">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex items-center gap-4 mt-4">
-        <span className="text-sm text-gray-500">Tong: {table.getFilteredRowModel().rows.length} chuyen</span>
-        <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}
-                className="px-3 py-1 border rounded disabled:opacity-50">← Truoc</button>
-        <span>Trang {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}</span>
-        <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}
-                className="px-3 py-1 border rounded disabled:opacity-50">Sau →</button>
-      </div>
-    </div>
-  );
-}
-```
+Component `FlightTable` cung cấp:
+- Bảng với sorting và pagination
+- Filter theo sân bay, hướng bay, trạng thái
+- Search theo mã chuyến bay
+- Link đến trang chi tiết từng chuyến bay
 
 ### 9.4. PredictionBadge
 
-```tsx
-// src/components/flights/PredictionBadge.tsx
-function formatDelay(minutes: number): string {
-  if (minutes < 0) return `Som ${Math.abs(minutes)} phut`;
-  if (minutes === 0) return 'Dung gio';
-  if (minutes < 15) return `+${minutes} phut`;
-  return `Tre ${minutes} phut`;
-}
-
-function delayColor(minutes: number): string {
-  if (minutes < 5)  return 'bg-green-100 text-green-800';
-  if (minutes < 15) return 'bg-yellow-100 text-yellow-800';
-  if (minutes < 30) return 'bg-orange-100 text-orange-800';
-  return 'bg-red-100 text-red-800';
-}
-
-export function PredictionBadge({ delayMinutes }: { delayMinutes: number }) {
-  return (
-    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${delayColor(delayMinutes)}`}>
-      {formatDelay(delayMinutes)}
-    </span>
-  );
-}
-```
+Component hiển thị dự đoán delay với màu sắc:
+- Xanh: đúng giờ hoặc sớm < 5 phút
+- Vàng: trễ 5-15 phút
+- Cam: trễ 15-30 phút
+- Đỏ: trễ > 30 phút
 
 ---
 
@@ -1034,35 +545,23 @@ export function PredictionBadge({ delayMinutes }: { delayMinutes: number }) {
 
 ### 10.1. Bai toan that su: Inference khong cung process voi Next.js
 
-Inference chay tren **GitHub Actions** (moi 5 phut) hoac tren **server rieng**, khong phai cung process voi Next.js. Dieu nay co nghia:
+Inference chạy trên **GitHub Actions** (mỗi 5 phút) hoặc trên **server riêng**, không phải cùng process với Next.js. Điều này có nghĩa:
 
-- `eventEmitter.emit()` trong Python khong the gui truc tiep sang SSE endpoint cua Next.js
-- Can mot co che trung gian de Next.js biet khi nao DB co thay doi
+- `eventEmitter.emit()` trong Python không thể gửi trực tiếp sang SSE endpoint của Next.js
+- Cần một cơ chế trung gian để Next.js biết khi nào DB có thay đổi
 
 **Giai phap: PostgreSQL LISTEN/NOTIFY**
 
-Thay vi dung Redis hay polling, ta dung chinh PostgreSQL lam message broker:
+Thay vì dùng Redis hay polling, ta dùng chính PostgreSQL làm message broker:
 
-```
-GitHub Actions (inference.py)          PostgreSQL                     Next.js (SSE endpoint)
-         │                                 │                                │
-         │  INSERT flights_predictions     │                                │
-         │ ──────────────────────────────►│                                │
-         │                                 │                                │
-         │  SELECT pg_notify(...)         │                                │
-         │ ──────────────────────────────►│                                │
-         │                                 │◄─── LISTEN "prediction_update"──┤
-         │                                 │                                │
-         │                                 │  NOTIFY "prediction_update" ────┼──► SSE push
-         │                                 │                                │      to clients
-```
+
 
 **Tai sao dung LISTEN/NOTIFY?**
 
-- Khong can them service (khong can Redis, khong can Supabase)
-- Mien phi, chi dung PostgreSQL da co
-- Do tre ~0 — ngay khi inference ghi xong DB, client nhan duoc SSE event
-- Chi phi them: 1 dong SQL trong inference.py + 1 module Node.js lang nghe
+- Không cần thêm service (không cần Redis, không cần Supabase)
+- Miễn phí, chỉ dùng PostgreSQL đã có
+- Độ trễ ~0 — ngay khi inference ghi xong DB, client nhận được SSE event
+- Chi phí thêm: 1 dòng SQL trong inference.py + 1 module Node.js lắng nghe
 
 ### 10.2. 3 phuong an real-time
 
@@ -1072,334 +571,126 @@ GitHub Actions (inference.py)          PostgreSQL                     Next.js (S
 | Redis pub/sub | ~0 | Trung binh | ~$5/thang | Thay the nuoc ngoai |
 | Polling 30s | 0-5 phut | Rat thap | $0 | Da loai bo |
 
-**Khuyen nghi:** Dung **PostgreSQL LISTEN/NOTIFY** — mien phi, khong can them service, do tre ~0, phu hop voi local dev va production.
+**Khuyen nghi:** Dung **PostgreSQL LISTEN/NOTIFY** — miễn phí, không cần thêm service, độ trễ ~0, phù hợp với local dev và production.
 
 ### 10.3. Phuong an: PostgreSQL LISTEN/NOTIFY
 
-SSE endpoint lang nghe NOTIFY tu PostgreSQL, broadcast tat ca SSE clients ngay khi co thay doi.
+SSE endpoint lắng nghe NOTIFY từ PostgreSQL, broadcast tất cả SSE clients ngay khi có thay đổi.
 
 #### 10.3.1. PostgreSQL: Them trigger va function NOTIFY
 
-Tao function va trigger de auto-NOTIFY moi khi co INSERT/UPDATE tren bang predictions:
+Tạo function và trigger để auto-NOTIFY mỗi khi có INSERT/UPDATE trên bảng predictions.
 
-```sql
--- src/db/migrations/002_add_notify_trigger.sql
-
--- Function gui NOTIFY khi co thay doi
-CREATE OR REPLACE FUNCTION notify_prediction_update()
-RETURNS TRIGGER AS $$
-BEGIN
-  PERFORM pg_notify(
-    'prediction_update',
-    json_build_object(
-      'action', TG_OP,
-      'flight_key', NEW.flight_key,
-      'predict_delay_minutes', NEW.predict_delay_minutes,
-      'predicted_at', NEW.predicted_at,
-      'updated_at', NOW()::text
-    )::text
-  );
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger tren flights_predictions
-DROP TRIGGER IF EXISTS trg_prediction_update ON flights_predictions;
-CREATE TRIGGER trg_prediction_update
-  AFTER INSERT OR UPDATE OF predict_delay_minutes
-  ON flights_predictions
-  FOR EACH ROW EXECUTE FUNCTION notify_prediction_update();
-
--- Trigger tren flights_current_snapshot (cap nhat trang thai chuyen bay)
-DROP TRIGGER IF EXISTS trg_snapshot_update ON flights_current_snapshot;
-CREATE TRIGGER trg_snapshot_update
-  AFTER INSERT OR UPDATE OF status_group
-  ON flights_current_snapshot
-  FOR EACH ROW EXECUTE FUNCTION notify_prediction_update();
-```
-
-Chay migration:
-
-```bash
-psql $DATABASE_URL -f src/db/migrations/002_add_notify_trigger.sql
-```
+Trigger hoạt động trên:
+- `flights_predictions` — khi có INSERT hoặc UPDATE `predict_delay_minutes`
+- `flights_current_snapshot` — khi có UPDATE `status_group`
 
 #### 10.3.2. Module DB Listener (Node.js)
 
-```typescript
-// src/lib/dbListener.ts
-import pg from 'pg';
+Module `dbListener` quản lý:
+- Kết nối PostgreSQL riêng để LISTEN
+- Callback pattern để thông báo cho SSE endpoint
+- Auto-reconnect khi mất kết nối
 
-const { Client } = pg;
+#### 10.3.3. SSE Endpoint (Short Listen + Reconnect Pattern)
 
-export type DBListenerCallback = (payload: PredictionNotifyPayload) => void;
+Endpoint `/api/stream` sử dụng pattern **short listen + reconnect** để tương thích serverless:
 
-export interface PredictionNotifyPayload {
-  action: 'INSERT' | 'UPDATE';
-  flight_key: string;
-  predict_delay_minutes: number | null;
-  predicted_at: string;
-  updated_at: string;
-}
-
-let sharedListener: pg.Client | null = null;
-const callbacks = new Set<DBListenerCallback>();
-
-export function startDBListener(): void {
-  if (sharedListener) return;
-
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL!,
-  });
-
-  client.connect();
-  client.query('LISTEN prediction_update');
-
-  client.on('notification', (msg) => {
-    if (msg.channel !== 'prediction_update') return;
-    try {
-      const payload: PredictionNotifyPayload = JSON.parse(msg.payload ?? '{}');
-      callbacks.forEach((cb) => cb(payload));
-    } catch {
-      // ignore parse errors
-    }
-  });
-
-  client.on('error', (err) => {
-    console.error('DB listener error:', err);
-    sharedListener = null;
-    setTimeout(startDBListener, 5000);
-  });
-
-  sharedListener = client;
-}
-
-export function onPredictionUpdate(cb: DBListenerCallback): () => void {
-  callbacks.add(cb);
-  return () => callbacks.delete(cb);
-}
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  Short Listen Pattern (Option B)                                            │
+│                                                                              │
+│  ┌─────────────┐    Listen 25s    ┌─────────────┐    Listen 25s           │
+│  │ SSE Client │◄─────────────────►│ SSE Endpoint│◄─────────────────►│ PG │  │
+│  └─────────────┘                  └─────────────┘                        │
+│         │                               │                                   │
+│         │  reconnect                    │  reconnect                       │
+│         ▼                               ▼                                   │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Listen 25s ──► Reconnect 1s ──► Listen 25s ──► Reconnect 2s ──►...│   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│  ✓ Hoạt động trên Vercel serverless                                        │
+│  ✓ Gap latency: 0-25s (tùy reconnect timing)                              │
+│  ✓ Auto-reconnect với exponential backoff                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### 10.3.3. SSE Endpoint (LISTEN + push that su)
-
-```typescript
-// src/app/api/stream/route.ts
-import { NextRequest } from 'next/server';
-import { startDBListener, onPredictionUpdate, type PredictionNotifyPayload } from '@/lib/dbListener';
-import { getFlightsWithPredictions } from '@/lib/queries/getFlights';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-export async function GET(req: NextRequest) {
-  const encoder = new TextEncoder();
-  let isClosed = false;
-
-  const stream = new ReadableStream({
-    start(controller) {
-      // Khoi dong listener neu chua co
-      startDBListener();
-
-      // Gui connected event
-      controller.enqueue(encoder.encode(
-        `data: ${JSON.stringify({ type: 'connected', at: new Date().toISOString() })}\n\n`
-      ));
-
-      // Lang nghe DB update -> push SSE event
-      const unsubscribe = onPredictionUpdate(async (payload: PredictionNotifyPayload) => {
-        if (isClosed) return;
-        try {
-          const flights = await getFlightsWithPredictions();
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({
-              type: 'predictions_updated',
-              payload,
-              flights,
-              at: new Date().toISOString(),
-            })}\n\n`)
-          );
-        } catch {
-          // Client da ngat, cleanup tu dong
-        }
-      });
-
-      // Heartbeat de giu connection song (ngat sau 30s khong co event)
-      const heartbeat = setInterval(() => {
-        if (isClosed) {
-          clearInterval(heartbeat);
-          return;
-        }
-        try {
-          controller.enqueue(encoder.encode(`: heartbeat\n\n`));
-        } catch {
-          clearInterval(heartbeat);
-        }
-      }, 25000);
-
-      req.signal.addEventListener('abort', () => {
-        isClosed = true;
-        clearInterval(heartbeat);
-        unsubscribe();
-        try { controller.close(); } catch { /* already closed */ }
-      });
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    },
-  });
-}
-```
+Cấu hình:
+- `LISTEN_DURATION_MS = 25000` (25 giây)
+- `HEARTBEAT_INTERVAL_MS = 20000` (20 giây)
+- `MAX_RECONNECT_ATTEMPTS = 5`
+- Exponential backoff: 1s → 2s → 4s → 8s → 16s
 
 #### 10.3.4. SSE Hook (Client Component)
 
-```typescript
-// src/hooks/useSSE.ts
-'use client';
+**Đã implement!** Hook `useSSE` cung cấp:
 
-import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
-import { FlightWithPrediction } from '@/types/flight';
+- State: `isConnected`, `lastUpdated`, `notifications`, `reconnectAttempt`, `error`
+- Auto-reconnect với exponential backoff (max 10 attempts)
+- Buffers last 50 notifications
+- Methods: `connect()`, `disconnect()`, `clearNotifications()`
 
-interface SSEContextValue {
-  flights: FlightWithPrediction[];
-  isConnected: boolean;
-  lastUpdated: Date | null;
-  refresh: () => void;
-}
-
-const SSEContext = createContext<SSEContextValue | null>(null);
-
-export function SSEProvider({ children }: { children: ReactNode }) {
-  const [flights, setFlights] = useState<FlightWithPrediction[]>([]);
-  const [isConnected, setIsConnected] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
-
-  const refresh = async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await fetch(`/api/flights?date=${today}`);
-      const data = await res.json();
-      if (data.data) {
-        setFlights(data.data);
-        setLastUpdated(new Date());
-      }
-    } catch (err) {
-      console.error('Refresh error:', err);
-    }
-  };
-
-  useEffect(() => {
-    refresh();
-
-    const eventSource = new EventSource('/api/stream');
-    eventSourceRef.current = eventSource;
-
-    eventSource.onopen = () => setIsConnected(true);
-    eventSource.onerror = () => {
-      setIsConnected(false);
-      // Auto reconnect mac dinh cua EventSource
-    };
-
-    eventSource.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-
-        if (msg.type === 'connected') {
-          setIsConnected(true);
-          return;
-        }
-
-        if (msg.type === 'predictions_updated' && msg.flights) {
-          setFlights(msg.flights);
-          setLastUpdated(new Date());
-        }
-      } catch {
-        // ignore parse errors
-      }
-    };
-
-    return () => {
-      eventSource.close();
-      eventSourceRef.current = null;
-    };
-  }, []);
-
-  return (
-    <SSEContext.Provider value={{ flights, isConnected, lastUpdated, refresh }}>
-      {children}
-    </SSEContext.Provider>
-  );
-}
-
-export function useSSE() {
-  const ctx = useContext(SSEContext);
-  if (!ctx) throw new Error('useSSE must be used within SSEProvider');
-  return ctx;
-}
-```
+Hooks bổ sung:
+- `useFlightUpdates(flightKey)` - theo dõi 1 chuyến bay cụ thể
+- `useRealtimeFlights(flightKeys)` - theo dõi nhiều chuyến bay
 
 #### 10.3.5. Connection Status Indicator
 
-```tsx
-// src/components/layout/ConnectionStatus.tsx
-'use client';
-import { useSSE } from '@/hooks/useSSE';
+**Đã implement!** Component `ConnectionStatus` hiển thị:
+- Chỉ báo kết nối (xanh/đỏ/vàng)
+- Thời gian cập nhật cuối
+- Số lần reconnect
+- Nút làm mới thủ công
+- Mode compact cho sidebar
 
-export function ConnectionStatus() {
-  const { isConnected, lastUpdated, refresh } = useSSE();
+#### 10.3.6. Cấu hình triển khai
 
-  return (
-    <div className="flex items-center gap-2 text-sm">
-      <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-      <span className="text-gray-500">
-        {isConnected
-          ? lastUpdated
-            ? `Cap nhat: ${lastUpdated.toLocaleTimeString('vi-VN')}`
-            : 'Dang ket noi...'
-          : 'Mat ket noi'}
-      </span>
-      <button onClick={refresh} className="text-blue-500 hover:underline text-xs">
-        Lam moi
-      </button>
-    </div>
-  );
-}
+**Files đã tạo:**
+
+| File | Mục đích |
+|------|-----------|
+| `src/db/migrations/001_add_notify_trigger.sql` | PostgreSQL trigger + function |
+| `src/lib/dbListener.ts` | DbListener class cho LISTEN/NOTIFY |
+| `src/app/api/stream/route.ts` | SSE endpoint |
+| `src/hooks/useSSE.ts` | useSSE hook + helpers |
+| `src/components/ConnectionStatus.tsx` | Connection status UI |
+
+**Cách chạy migration:**
+
+```bash
+# Chạy migration để tạo trigger
+psql $DATABASE_URL -f src/db/migrations/001_add_notify_trigger.sql
 ```
 
-#### 10.3.6. Luu y khi deploy
+#### 10.3.7. Lưu ý khi deploy
 
-**Vercel (serverless):** SSE endpoint voi persistent LISTEN connection **khong hoat dong tren Vercel** vi serverless functions co timeout. Neu deploy len Vercel, can chuyen sang phuong an **Webhook** (section 10.4) hoac **Railway + persistent process**.
+**Vercel (serverless):** ✅ Hoạt động với short listen pattern (Option B)
 
-**Local dev / Railway / VPS:** LISTEN/NOTIFY hoat dong tot, khong co gioi han.
+**Local dev / Railway / VPS:** ✅ Hoạt động tốt, có thể tăng LISTEN_DURATION_MS lên 60s
 
-**Redis la phuong an thay the tot neu can** — chi phi ~$5/thang tren Upstash, hoat dong tren Vercel serverless.
+**Redis là phương án thay thế tốt nếu cần** — chi phí ~$5/tháng trên Upstash, hoạt động trên Vercel serverless
 
 ---
 
-*Lan cap nhat: 2026-05-08 — Chuyen sang PostgreSQL LISTEN/NOTIFY cho real-time that su. Bo polling 30s, bo Redis pub/sub. Inference chi can ghi DB, trigger auto-NOTIFY, SSE push ngay den client.*
+*Lần cập nhật: 2026-05-09 — Implement SSE + LISTEN/NOTIFY với short listen pattern (Option B) cho serverless compatibility.*
 
 
 ### 11.1. Phan loai user
 
 | Loai | Mo ta | Can auth? |
 |------|-------|-----------|
-| Guest | Xem dashboard cong khai | Khong |
-| Subscriber | Theo doi chuyen bay, nhan thong bao | Co (email) |
-| Admin | Quan ly model, xem logs | Co (password) |
+| Guest | Xem dashboard công khai | Không |
+| Subscriber | Theo dõi chuyến bay, nhận thông báo | Có (email) |
+| Admin | Quản lý model, xem logs | Có (password) |
 
 ### 11.2. Guest (mac dinh)
 
-Xem dashboard, bang chuyen bay, thoi tiet, thong ke - khong can dang nhap.
+Xem dashboard, bảng chuyến bay, thời tiết, thống kê - không cần đăng nhập.
 
 ### 11.3. Admin (NextAuth.js)
 
-Trang /admin: quan ly model, trigger manual inference, xem logs.
+Trang /admin: quản lý model, trigger manual inference, xem logs.
 
 ---
 
@@ -1407,60 +698,24 @@ Trang /admin: quan ly model, trigger manual inference, xem logs.
 
 ### 12.1. Docker Compose (development)
 
-```yaml
-# docker-compose.yml
-version: '3.9'
-
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: flight_delay
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/flight_delay
-    depends_on:
-      - postgres
-    restart: unless-stopped
-
-volumes:
-  postgres_data:
-```
+Cấu hình development với Docker Compose bao gồm:
+- PostgreSQL 16 (port 5432)
+- Next.js web app (port 3000)
+- Volume cho persistent data
 
 ### 12.2. Production (Vercel + Railway)
 
-| Component | Nen tang | Chi phi |
+| Component | Nền tảng | Chi phi |
 |-----------|---------|---------|
-| Web (Next.js) | Vercel | Mien phi |
+| Web (Next.js) | Vercel | Miễn phí |
 | PostgreSQL | Railway / Supabase | ~$5/thang |
-| Inference Worker | Railway / GitHub Actions | Mien phi - $5/thang |
-
-```bash
-# Deploy web len Vercel
-vercel deploy
-
-# Inference chay tren GitHub Actions (mien phi, moi 5 phut)
-```
+| Inference Worker | Railway / GitHub Actions | Miễn phí - $5/thang |
 
 ### 12.3. Environment variables
 
-```bash
-# .env.example
-DATABASE_URL=postgresql://postgres:password@host:5432/flight_delay
-NEXT_PUBLIC_API_URL=https://your-domain.com
-```
+Các biến môi trường cần thiết:
+- `DATABASE_URL` — connection string PostgreSQL
+- `NEXT_PUBLIC_API_URL` — URL của web app
 
 ---
 
@@ -1468,30 +723,13 @@ NEXT_PUBLIC_API_URL=https://your-domain.com
 
 ### 13.1. Health check
 
-```typescript
-// src/app/api/health/route.ts
-import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
-
-export async function GET() {
-  const checks = { postgres: false };
-  try {
-    await query('SELECT 1');
-    checks.postgres = true;
-  } catch {}
-
-  const healthy = checks.postgres;
-  return NextResponse.json({
-    status: healthy ? 'healthy' : 'degraded',
-    checks,
-    timestamp: new Date().toISOString(),
-  }, { status: healthy ? 200 : 503 });
-}
-```
+Endpoint `/api/health` kiểm tra:
+- Kết nối PostgreSQL
+- Trả về status: healthy (200) hoặc degraded (503)
 
 ### 13.2. Logging
 
-Dung console.log trong Next.js. Logs hien thi trong Vercel dashboard hoac stdout khi chay local.
+Sử dụng `console.log` trong Next.js. Logs hiển thị trong Vercel dashboard hoặc stdout khi chạy local.
 
 ---
 
@@ -1499,23 +737,23 @@ Dung console.log trong Next.js. Logs hien thi trong Vercel dashboard hoac stdout
 
 ### Phase 1: Foundation (Tuan 1-2)
 - [ ] Setup Next.js project: npx create-next-app@latest web
-- [ ] Ket noi PostgreSQL (DATABASE_URL)
+- [ ] Kết nối PostgreSQL (DATABASE_URL)
 - [ ] Implement 3 query functions: getFlightsWithPredictions, getLatestWeather, getFlightByKey
 - [ ] Implement 3 API routes: /api/flights, /api/weather, /api/flights/[key]
-- [ ] Dashboard page voi flight table (ISR, filter, sort, pagination)
+- [ ] Dashboard page với flight table (ISR, filter, sort, pagination)
 
 ### Phase 2: UI Components (Tuan 3)
 - [ ] PredictionBadge, WeatherCard, WeatherGrid
-- [ ] FlightTable voi TanStack Table
-- [ ] Trang chi tiet chuyen bay /flights/[key]
-- [ ] FlightTimeline (lich su trang thai)
-- [ ] Trang thoi tiet /weather
-- [ ] Trang thong ke /stats voi Recharts
+- [ ] FlightTable với TanStack Table
+- [ ] Trang chi tiết chuyến bay /flights/[key]
+- [ ] FlightTimeline (lịch sử trạng thái)
+- [ ] Trang thời tiết /weather
+- [ ] Trang thống kê /stats với Recharts
 
 ### Phase 3: Real-time + Worker (Tuan 4)
-- [ ] Chay migration: `src/db/migrations/002_add_notify_trigger.sql` (PostgreSQL trigger)
-- [ ] Module `src/lib/dbListener.ts` (LISTEN handler)
-- [ ] SSE endpoint `/api/stream` + SSE hook frontend
+- [x] Chạy migration: `src/db/migrations/001_add_notify_trigger.sql` (PostgreSQL trigger)
+- [x] Module `src/lib/dbListener.ts` (LISTEN handler)
+- [x] SSE endpoint `/api/stream` + SSE hook frontend
 - [ ] Inference worker: GitHub Actions workflow (*/5 * * * *)
 
 ### Phase 4: Polish + Production (Tuan 5-6)
@@ -1552,9 +790,9 @@ Dung console.log trong Next.js. Logs hien thi trong Vercel dashboard hoac stdout
 
 | Dich vu | Muc dich | Chi phi |
 |---------|---------|---------|
-| Vercel | Next.js hosting | Mien phi |
+| Vercel | Next.js hosting | Miễn phí |
 | Railway / Supabase | PostgreSQL | ~$5/thang |
-| GitHub Actions | CI/CD + Inference Worker | Mien phi |
+| GitHub Actions | CI/CD + Inference Worker | Miễn phí |
 
 ### Development
 
@@ -1567,60 +805,59 @@ Dung console.log trong Next.js. Logs hien thi trong Vercel dashboard hoac stdout
 
 ---
 
-*Lan cap nhat: 2026-05-08 — Cap nhat theo thuc te project: bo Redis/ONNX, dung lai inference.py + flights_predictions co san, Python subprocess thay vi Node.js worker.*
+*Lần cập nhật: 2026-05-08 — Cập nhật theo thực tế project: bỏ Redis/ONNX, dùng lại inference.py + flights_predictions có sẵn, Python subprocess thay vì Node.js worker.*
 
-});
+## Chú ý
 
-// Usage
-logger.info({ flight_key, delay_minutes_predicted }, 'Prediction computed');
-logger.error({ err }, 'Model inference failed');
-```
+### Những điểm cần lưu ý khi vận hành
 
-### 14.2. Health check
+**1. GitHub Actions chỉ thu thập dữ liệu thô**
+- File `.github/workflows/collect-data.yml` chạy mỗi 30 phút và ghi vào 4 bảng: `flights_nb`, `flights_dn`, `flights_tsn`, `weather_metar`
+- **Không tự động** chạy `processing.py` hay `inference.py`
+- Muốn tự động hóa hoàn toàn → thêm job `python src/processing.py` và `python src/inference.py` vào workflow
 
-```typescript
-// src/app/api/health/route.ts
-import { NextResponse } from 'next/server';
-import { redis } from '@/lib/redis';
-import { db } from '@/lib/db';
+**2. `processing.py` và `inference.py` hiện chạy thủ công**
+- Sau khi collector chạy xong, cần chạy thủ công `python src/processing.py` để tạo snapshot và features
+- Sau đó chạy `python src/inference.py` để sinh dự đoán vào `flights_predictions`
+- Thứ tự: **collect → processing → inference → web hiển thị**
 
-export async function GET() {
-  const checks = {
-    redis: false,
-    postgres: false,
-    model: false,
-  };
+**3. Web app đọc từ 2 bảng**
+- `flights_current_snapshot` — dữ liệu chuyến bay hiện tại + features
+- `flights_predictions` — kết quả dự đoán từ model
+- Web query ghép 2 bảng qua `LEFT JOIN flight_key` trong `src/lib/queries/getFlights.ts`
 
-  try {
-    await redis.ping();
-    checks.redis = true;
-  } catch {}
+**4. Hạn chế của GitHub Actions**
+- Timeout 20 phút mỗi job, không phù hợp cho tác vụ chạy dài
+- Không lưu trữ trạng thái giữa các lần chạy
+- Không hỗ trợ persistent connection (SSE, LISTEN/NOTIFY)
 
-  try {
-    await db.query('SELECT 1');
-    checks.postgres = true;
-  } catch {}
+**5. Real-time SSE trên Vercel**
+- SSE endpoint (`/api/stream`) sử dụng PostgreSQL `LISTEN/NOTIFY`
+- **Không hoạt động** trên Vercel serverless (bị timeout 30s)
+- Cần deploy trên Railway, VPS, hoặc dùng polling thay thế
 
-  const healthy = Object.values(checks).every(Boolean);
-  return NextResponse.json({
-    status: healthy ? 'healthy' : 'degraded',
-    checks,
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  }, { status: healthy ? 200 : 503 });
-}
-```
+**6. Cập nhật model mới**
+- Khi có model mới, copy file `.joblib` vào `Data Modeling/artifacts/`
+- Đảm bảo feature columns giữ nguyên thứ tự với lúc training
+- Chạy lại `inference.py` sau khi thay model
 
-### 14.3. Metrics (tùy chọn)
+**7. Threshold trễ 15 phút**
+- Trong `processing.py` có `DELAY_THRESHOLD_MINUTES = 15` — chuyến bay trễ ≥ 15 phút mới được gắn nhãn `label_delay = 1`
+- Có thể điều chỉnh threshold này tùy nghiệp vụ
 
-Dùng Prometheus client cho Node.js để thu thập metrics:
+**8. Cơ chế dedup**
+- Dùng `flight_key = source|dir|route|flight_num|scheduled_dt` để deduplicate
+- Với mỗi chuyến bay, chỉ giữ bản ghi mới nhất trong `flights_current_snapshot`
 
-- `prediction_latency_ms`: Thời gian inference model
-- `sse_client_count`: Số lượng SSE client đang kết nối
-- `cache_hit_rate`: Tỷ lệ cache hit Redis
-- `flights_processed_total`: Tổng số chuyến bay đã xử lý
+**9. METAR weather code mapping**
+- `VVNB` → `NB` (Nội Bài)
+- `VVDN` → `DN` (Đà Nẵng)
+- `VVTS` → `TSN` (Tân Sơn Nhất)
+- Các sân bay khác ngoài 3 mã này sẽ bị bỏ qua trong weather merge
 
----
+**10. Database connection pool**
+- `db.ts` cấu hình `max: 20` connections — đủ cho ~50-100 user đồng thời
+- Tăng `max` nếu cần hỗ trợ nhiều user hơn
+- Có thể cấu hình `DATABASE_URL` trỏ đến Supabase, Railway, hoặc local PostgreSQL
 
-
-*Lần cập nhật: 2026-05-08*
+*Lần cập nhật: 2026-05-08 — Thêm sơ đồ luồng dữ liệu 4 giai đoạn và phần Chú ý.*
