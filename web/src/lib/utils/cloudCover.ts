@@ -7,7 +7,20 @@ const CLOUD_COVERAGE_MAP: Record<string, string> = {
   VV: 'Tầm nhìn thẳng đứng',
   NSC: 'Không mây đáng kể',
   NCD: 'Không có mây',
+  clear: 'Trời quang',
+  CAVOK: 'Trời quang',
 };
+
+function extractCloudCode(layer: string): string {
+  const trimmed = layer.trim();
+
+  if (trimmed.includes('@')) {
+    return trimmed.split('@')[0].trim();
+  }
+
+  const match = trimmed.match(/^(FEW|SCT|BKN|OVC|CLR|VV|NSC|NCD)/);
+  return match ? match[1] : trimmed;
+}
 
 export function formatCloudCover(raw: string | null): string {
   if (!raw || raw.trim() === '') {
@@ -17,7 +30,7 @@ export function formatCloudCover(raw: string | null): string {
   return raw
     .split(',')
     .map((layer) => {
-      const code = layer.trim().split('@')[0].trim();
+      const code = extractCloudCode(layer);
       return CLOUD_COVERAGE_MAP[code] ?? code;
     })
     .join(', ');

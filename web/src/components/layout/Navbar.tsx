@@ -2,12 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Plane, CloudSun, BarChart3, LayoutDashboard } from 'lucide-react';
+import { Plane, BarChart3, LayoutDashboard } from 'lucide-react';
 
 const navLinks = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/flights', label: 'Chuyến bay', icon: Plane },
-  { href: '/weather', label: 'Thời tiết', icon: CloudSun },
   { href: '/stats', label: 'Thống kê', icon: BarChart3 },
 ];
 
