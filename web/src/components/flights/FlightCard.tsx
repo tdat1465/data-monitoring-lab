@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { MapPin, Clock } from 'lucide-react';
 import type { Flight } from '@/types/flight';
 import { formatTime } from '@/lib/utils/formatTime';
@@ -16,10 +15,7 @@ interface FlightCardProps {
 
 export function FlightCard({ flight }: FlightCardProps) {
   return (
-    <Link
-      href={`/flights/${encodeURIComponent(flight.flight_key)}`}
-      className="block bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-blue-200 transition-all"
-    >
+    <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-blue-200 transition-all">
       <div className="flex items-center justify-between mb-3">
         <span className="font-mono font-bold text-blue-600 text-lg">
           {flight.flight_number}
@@ -42,6 +38,6 @@ export function FlightCard({ flight }: FlightCardProps) {
         </div>
         <StatusBadge status={flight.status_group} />
       </div>
-    </Link>
+    </div>
   );
 }
