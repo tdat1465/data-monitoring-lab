@@ -80,7 +80,7 @@ def run_inference():
 
     print(f"Running inference for {len(df_to_predict)} flights...")
 
-    model_path = project_dir.parent / "Data Modeling" / "artifacts" / "delay_model_twostage.joblib"
+    model_path = project_dir.parent / "Data Modeling" / "artifacts" / "delay_model.joblib"
     if not model_path.exists():
         print(f"Model file not found at {model_path}")
         return
