@@ -13,13 +13,8 @@ import {
 import { ArrowUpDown, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import type { Flight } from '@/types/flight';
 import { formatTime } from '@/lib/utils/formatTime';
+import { formatFlightRoute } from '@/lib/utils/formatRoute';
 import { StatusBadge, DelayBadge } from '@/components/ui/Badge';
-
-const AIRPORT_NAMES: Record<string, string> = {
-  NB: 'Nội Bài',
-  DN: 'Đà Nẵng',
-  TSN: 'Tân Sơn Nhất',
-};
 
 interface FlightTableProps {
   initialFlights: Flight[];
@@ -54,27 +49,36 @@ export function FlightTable({ initialFlights }: FlightTableProps) {
         ),
       },
       {
-        accessorKey: 'source_airport',
-        header: 'Sân bay',
-        cell: ({ row }) => AIRPORT_NAMES[row.original.source_airport] ?? row.original.source_airport,
-      },
-      {
-        accessorKey: 'direction',
+        accessorKey: 'route',
         header: ({ column }) => (
           <button
             className="flex items-center gap-1 hover:text-blue-600"
             onClick={() => column.toggleSorting()}
           >
-            Chiều
+            Tuyến bay
             <ArrowUpDown className="w-3 h-3" />
           </button>
         ),
-        cell: ({ row }) =>
-          row.original.direction === 'Arrival' ? 'Đến' : 'Đi',
-      },
-      {
-        accessorKey: 'route_airport_std',
-        header: 'Điểm đến',
+        cell: ({ row }) => {
+          const f = row.original;
+          const route = formatFlightRoute(f.source_airport, f.route_airport_std, f.direction);
+          return (
+            <span className="font-medium text-gray-800">{route}</span>
+          );
+        },
+        sortingFn: (rowA, rowB) => {
+          const a = formatFlightRoute(
+            rowA.original.source_airport,
+            rowA.original.route_airport_std,
+            rowA.original.direction
+          );
+          const b = formatFlightRoute(
+            rowB.original.source_airport,
+            rowB.original.route_airport_std,
+            rowB.original.direction
+          );
+          return a.localeCompare(b);
+        },
       },
       {
         accessorKey: 'scheduled_dt',
@@ -83,7 +87,7 @@ export function FlightTable({ initialFlights }: FlightTableProps) {
             className="flex items-center gap-1 hover:text-blue-600"
             onClick={() => column.toggleSorting()}
           >
-            Giờ bay
+            Giờ khởi hành
             <ArrowUpDown className="w-3 h-3" />
           </button>
         ),
@@ -177,6 +181,11 @@ export function FlightTable({ initialFlights }: FlightTableProps) {
           <option value="on_time">Đúng giờ</option>
           <option value="delayed">Trễ</option>
           <option value="unknown">Chưa rõ</option>
+          <option value="enroute">Đang bay</option>
+          <option value="landed">Đã hạ cánh</option>
+          <option value="departed">Đã cất cánh</option>
+          <option value="cancelled">Hủy</option>
+          <option value="other">Khác</option>
         </select>
       </div>
 

@@ -36,7 +36,6 @@ export async function getFlightsWithPredictions(date?: string): Promise<Flight[]
     FROM flights_current_snapshot s
     LEFT JOIN flights_predictions p ON s.flight_key = p.flight_key
     WHERE s.flight_date = $1
-      AND s.status_group NOT IN ('landed', 'departed', 'cancelled')
     ORDER BY s.source_airport, s.direction, s.scheduled_dt ASC
   `;
 
