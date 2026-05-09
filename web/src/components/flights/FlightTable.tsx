@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import Link from 'next/link';
 import {
   useReactTable,
   getCoreRowModel,
@@ -49,12 +48,9 @@ export function FlightTable({ initialFlights }: FlightTableProps) {
           </button>
         ),
         cell: ({ row }) => (
-          <Link
-            href={`/flights/${encodeURIComponent(row.original.flight_key)}`}
-            className="font-mono font-bold text-blue-600 hover:underline"
-          >
+          <span className="font-mono font-bold text-blue-600">
             {row.original.flight_number}
-          </Link>
+          </span>
         ),
       },
       {
@@ -112,14 +108,6 @@ export function FlightTable({ initialFlights }: FlightTableProps) {
         cell: ({ row }) => (
           <DelayBadge minutes={row.original.predict_delay_minutes} />
         ),
-      },
-      {
-        accessorKey: 'visibility_miles',
-        header: 'Tầm nhìn',
-        cell: ({ row }) =>
-          row.original.visibility_miles != null
-            ? `${row.original.visibility_miles} mi`
-            : '—',
       },
     ],
     []
