@@ -39,7 +39,7 @@ export function StatsClient({ flights, rawWeatherHistory }: { flights: Flight[],
 
       {/* Render Component tương ứng */}
       <div className="mt-6">
-        {activeTab === 'overview' && <OverviewTab flights={flights} />}
+        {activeTab === 'overview' && <OverviewTab flights={flights} rawWeatherHistory={rawWeatherHistory} />}
         {activeTab === 'weather' && <WeatherTab rawWeatherHistory={rawWeatherHistory} />}
         {activeTab === 'flights' && <FlightTab flights={flights} />}
       </div>
