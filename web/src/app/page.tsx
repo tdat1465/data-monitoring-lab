@@ -3,10 +3,15 @@ import { Plane, CloudSun } from 'lucide-react';
 import { getFlightsWithPredictions } from '@/lib/queries/getFlights';
 import { getLatestWeather } from '@/lib/queries/getWeather';
 import { FlightTable } from '@/components/flights/FlightTable';
+import { DateFilter } from '@/components/flights/DateFilter';
 import { WeatherGrid } from '@/components/weather/WeatherGrid';
 import { Card, CardContent } from '@/components/ui/Card';
 
 export const revalidate = 300;
+
+interface DashboardPageProps {
+  searchParams: Promise<{ date?: string }>;
+}
 
 function StatCard({
   label,
@@ -34,13 +39,16 @@ function StatCard({
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const params = await searchParams;
+  const selectedDate = params.date ?? new Date().toISOString().split('T')[0];
+
   let flights: Awaited<ReturnType<typeof getFlightsWithPredictions>> = [];
   let weather: Awaited<ReturnType<typeof getLatestWeather>> = [];
 
   try {
     [flights, weather] = await Promise.all([
-      getFlightsWithPredictions(),
+      getFlightsWithPredictions(selectedDate),
       getLatestWeather(),
     ]);
   } catch (err) {
@@ -60,19 +68,26 @@ export default async function DashboardPage() {
   const delayRate =
     total > 0 ? ((delayed / (total - noPrediction || 1)) * 100).toFixed(1) : '0';
 
+  const displayDate = new Date(selectedDate + 'T00:00:00').toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-1">
-          Theo dõi chuyến bay — {new Date().toLocaleDateString('vi-VN', {
-            weekday: 'long',
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-          })}
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 mt-1">
+            Theo dõi chuyến bay — {displayDate}
+          </p>
+        </div>
+        <Suspense fallback={<div className="h-10" />}>
+          <DateFilter />
+        </Suspense>
       </div>
 
       {/* Stats */}
@@ -116,7 +131,7 @@ export default async function DashboardPage() {
       <section>
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <Plane className="w-5 h-5 text-blue-500" />
-          Danh sách chuyến bay hôm nay
+          Danh sách chuyến bay ngày {displayDate.split(',')[0]}
         </h2>
         <Suspense fallback={<div className="text-gray-400">Đang tải dữ liệu...</div>}>
           <FlightTable initialFlights={flights} />
