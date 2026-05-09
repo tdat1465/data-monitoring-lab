@@ -153,7 +153,7 @@ def parse_hhmm(s):
     dt = pd.to_datetime(s, format="%H:%M", errors="coerce")
     return dt
 
-def merge_weather_asof(flight_df: pd.DataFrame, weather_df: pd.DataFrame) -> pd.DataFrame:
+def merge_weather_asof(flight_df: pd.DataFrame, weather_df: pd.DataFrame, tolerance: pd.Timedelta = pd.Timedelta(hours=3)) -> pd.DataFrame:
     left = flight_df.sort_values(["source_airport", "retrieved_at_vn"]).copy()
     right = weather_df.sort_values(["source_airport", "report_time_vn"]).copy()
 
@@ -164,6 +164,7 @@ def merge_weather_asof(flight_df: pd.DataFrame, weather_df: pd.DataFrame) -> pd.
             g_left = g_left.copy()
             for c in ["temperature_c", "dew_point_c", "wind_direction_deg", "wind_speed_kt", "visibility_miles", "cloud_cover", "is_wind_variable", "raw_metar", "report_time_vn"]:
                 g_left[c] = np.nan
+            g_left["weather_age_minutes"] = np.nan
             merged_parts.append(g_left)
             continue
 
@@ -174,11 +175,18 @@ def merge_weather_asof(flight_df: pd.DataFrame, weather_df: pd.DataFrame) -> pd.
             right_on="report_time_vn",
             direction="backward",
             allow_exact_matches=True,
+            tolerance=tolerance,
             suffixes=("", "_wx"),
         )
 
         if "source_airport_wx" in g_merged.columns:
             g_merged = g_merged.drop(columns=["source_airport_wx"])
+
+        g_merged["weather_age_minutes"] = (
+            (g_merged["retrieved_at_vn"] - g_merged["report_time_vn"])
+            .dt.total_seconds()
+            / 60.0
+        )
 
         merged_parts.append(g_merged)
 
@@ -193,6 +201,9 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     out["scheduled_dayofweek"] = out["scheduled_dt"].dt.dayofweek
     out["scheduled_month"] = out["scheduled_dt"].dt.month
 
+    out["sin_hour"] = np.sin(2 * np.pi * out["scheduled_hour"] / 24)
+    out["cos_hour"] = np.cos(2 * np.pi * out["scheduled_hour"] / 24)
+
     out["airline_code"] = out["flight_number"].str.extract(r"^([A-Z0-9]{2})", expand=False)
     out["flight_num_only"] = pd.to_numeric(out["flight_number"].str.extract(r"(\d+)", expand=False), errors="coerce")
 
@@ -202,6 +213,12 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     out["temperature_c"] = pd.to_numeric(out["temperature_c"], errors="coerce")
     out["dew_point_c"] = pd.to_numeric(out["dew_point_c"], errors="coerce")
     out["visibility_miles"] = pd.to_numeric(out["visibility_miles"], errors="coerce")
+
+    out["visibility_bin"] = pd.cut(
+        out["visibility_miles"],
+        bins=[-np.inf, 3, 6, np.inf],
+        labels=["Bad", "Medium", "Good"]
+    ).astype(str)
 
     out["temp_dew_spread"] = out["temperature_c"] - out["dew_point_c"]
     out["is_low_visibility"] = (out["visibility_miles"] <= 3).astype(float)
@@ -338,6 +355,28 @@ def process_data():
     flights.loc[status_delay_mask, "label_delay"] = 1
     flights.loc[status_non_delay_mask, "label_delay"] = 0
 
+    flights = flights.drop_duplicates().copy()
+
+    required_non_null = [
+        "source_airport",
+        "direction",
+        "route_airport_std",
+        "flight_number",
+        "scheduled_dt",
+        "retrieved_at_vn",
+        "status_raw",
+        "status_group",
+    ]
+    missing_required_mask = flights[required_non_null].isna().any(axis=1)
+    flights = flights.loc[~missing_required_mask].copy()
+
+    valid_directions = {"Arrival", "Departure"}
+    invalid_dir_mask = ~flights["direction"].isin(valid_directions)
+    flights = flights.loc[~invalid_dir_mask].copy()
+
+    flight_number_blank_mask = flights["flight_number"].astype(str).str.strip().eq("")
+    flights = flights.loc[~flight_number_blank_mask].copy()
+
     key_cols = ["source_airport", "direction", "route_airport_std", "flight_number", "scheduled_dt"]
     flights["flight_key"] = flights[key_cols].astype(str).agg("|".join, axis=1)
 
@@ -416,6 +455,8 @@ def process_data():
 
     training_dataset = training_features[training_features["label_delay"].isin([0, 1])].copy()
     training_dataset["label_delay"] = training_dataset["label_delay"].astype(int)
+
+    training_dataset = training_dataset[training_dataset["minutes_to_departure_at_snapshot"] >= 0].copy()
 
     training_dataset_to_save = training_dataset.copy()
     if "flight_key" not in training_dataset_to_save.columns:
