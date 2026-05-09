@@ -4,10 +4,8 @@ import { useState, useMemo } from 'react';
 import { WeatherTimeSeriesChart } from './weather_charts/WeatherTimeSeriesChart';
 import { AirportComparisonChart } from './weather_charts/AirportComparisonChart';
 import { VisibilityChart } from './weather_charts/VisibilityChart';
-import { CloudCoverChart } from './weather_charts/CloudCoverChart';
 import { WindRoseChart } from './weather_charts/WindRoseChart';
 import { PressureHumidityChart } from './weather_charts/PressureHumidityChart';
-PressureHumidityChart
 
 export function WeatherTab({ rawWeatherHistory = [] }: any) {
   const getInitialDates = () => {
@@ -127,9 +125,9 @@ export function WeatherTab({ rawWeatherHistory = [] }: any) {
   }
 
   const handleClearFilter = () => {
-    const emptyRange = { start: '', end: '' };
-    setInputDateRange(emptyRange);
-    setAppliedDateRange(emptyRange);
+    const defaultRange = getInitialDates();
+    setInputDateRange(defaultRange);
+    setAppliedDateRange(defaultRange);
     setResolution('raw');
   };
 
