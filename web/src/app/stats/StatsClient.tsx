@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import type { Flight } from '@/types/flight';
+import type { WeatherMETAR } from '@/types/weather';
 import { OverviewTab } from './components/OverviewTab';
 import { FlightTab } from './components/FlightTab';
 import { WeatherTab } from './components/WeatherTab';
 
-export function StatsClient({ flights }: { flights: Flight[] }) {
+export function StatsClient({ flights, rawWeatherHistory }: { flights: Flight[], rawWeatherHistory: WeatherMETAR[] }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'weather' | 'flights'>('overview');
 
   return (
@@ -39,7 +40,7 @@ export function StatsClient({ flights }: { flights: Flight[] }) {
       {/* Render Component tương ứng */}
       <div className="mt-6">
         {activeTab === 'overview' && <OverviewTab flights={flights} />}
-        {activeTab === 'weather' && <WeatherTab />}
+        {activeTab === 'weather' && <WeatherTab rawWeatherHistory={rawWeatherHistory} />}
         {activeTab === 'flights' && <FlightTab flights={flights} />}
       </div>
     </div>
