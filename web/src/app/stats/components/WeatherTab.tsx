@@ -1,13 +1,19 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { DateFilterBar } from './DateFilterBar';
 import { WeatherTimeSeriesChart } from './weather_charts/WeatherTimeSeriesChart';
 import { AirportComparisonChart } from './weather_charts/AirportComparisonChart';
 import { VisibilityChart } from './weather_charts/VisibilityChart';
 import { WindRoseChart } from './weather_charts/WindRoseChart';
 import { PressureHumidityChart } from './weather_charts/PressureHumidityChart';
 
-export function WeatherTab({ rawWeatherHistory = [] }: any) {
+export function WeatherTab({ 
+  rawWeatherHistory = [], 
+  onDateFilter, 
+  initialDateRange 
+}: any) {
+
   const getInitialDates = () => {
     const today = new Date();
     const sevenDaysAgo = new Date();
@@ -21,8 +27,9 @@ export function WeatherTab({ rawWeatherHistory = [] }: any) {
     return { start: formatDate(sevenDaysAgo), end: formatDate(today) };
   };
 
-  const [inputDateRange, setInputDateRange] = useState(getInitialDates);
-  const [appliedDateRange, setAppliedDateRange] = useState(getInitialDates);
+  const defaultDates = initialDateRange || getInitialDates();
+  const [inputDateRange, setInputDateRange] = useState(defaultDates);
+  const [appliedDateRange, setAppliedDateRange] = useState(defaultDates);
   const [resolution, setResolution] = useState<'raw' | '30m' | '1h' | '1d'>('raw');
 
   const filteredData = useMemo(() => {
@@ -129,59 +136,29 @@ export function WeatherTab({ rawWeatherHistory = [] }: any) {
     setInputDateRange(defaultRange);
     setAppliedDateRange(defaultRange);
     setResolution('raw');
+    if (onDateFilter) {
+      onDateFilter(defaultRange);
+    }
+  };
+
+  const handleApplyFilter = () => {
+    setAppliedDateRange(inputDateRange);
+    if (onDateFilter) {
+      onDateFilter(inputDateRange);
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-600">Từ ngày:</label>
-            <input
-              type="date"
-              value={inputDateRange.start} 
-              className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              onChange={(e) => setInputDateRange({ ...inputDateRange, start: e.target.value })}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-600">Đến ngày:</label>
-            <input
-              type="date"
-              value={inputDateRange.end} 
-              className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              onChange={(e) => setInputDateRange({ ...inputDateRange, end: e.target.value })}
-            />
-          </div>
-          <button 
-            onClick={() => setAppliedDateRange(inputDateRange)}
-            className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            Lọc
-          </button>
-
-          <div className="h-8 w-px bg-gray-200 mx-2 hidden md:block"></div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-600">Hiển thị:</span>
-            <div className="flex bg-gray-100 p-1 rounded-lg">
-              {[{ label: '30p', value: 'raw' }, 
-                { label: '1 Giờ', value: '1h' }, 
-                { label: '1 Ngày', value: '1d' }].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setResolution(opt.value as any)}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${resolution === opt.value ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          {(inputDateRange.start || inputDateRange.end) && (
-            <button onClick={handleClearFilter} className="text-sm text-red-600 hover:underline ml-auto">Xóa lọc</button>
-          )}
-        </div>
+        <DateFilterBar
+          inputDateRange={inputDateRange}
+          setInputDateRange={setInputDateRange}
+          resolution={resolution}
+          setResolution={setResolution}
+          onApply={handleApplyFilter}
+          onClear={handleClearFilter}
+        />
       </div>
       
       {/* HÀNG 1: Biểu đồ đường chuỗi thời gian (Chiếm Full 100% chiều ngang) */}
