@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 import re
+import time
 
 from db_utils import save_dataframe
 
@@ -9,6 +10,9 @@ REQUEST_TIMEOUT = 30
 PAGE_SIZE = 15
 MAX_PAGES = 30
 TSN_TERMINALS = ["T1", "T3"]
+CONNECT_TIMEOUT = 20
+READ_TIMEOUT = 40
+REQUEST_RETRIES = 4
 
 
 def _create_acv_session() -> requests.Session:
@@ -28,6 +32,31 @@ def _create_acv_session() -> requests.Session:
         }
     )
     return session
+
+
+def _request_with_retry(session: requests.Session, method: str, url: str, **kwargs) -> requests.Response:
+    last_exc: Exception | None = None
+    for attempt in range(1, REQUEST_RETRIES + 1):
+        try:
+            return session.request(
+                method,
+                url,
+                timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+                **kwargs,
+            )
+        except requests.exceptions.RequestException as exc:
+            last_exc = exc
+            if attempt < REQUEST_RETRIES:
+                wait_seconds = min(2 ** (attempt - 1), 6)
+                print(
+                    f"Canh bao: Loi ket noi ACV (lan {attempt}/{REQUEST_RETRIES}) - "
+                    f"{type(exc).__name__}. Thu lai sau {wait_seconds}s..."
+                )
+                time.sleep(wait_seconds)
+
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("Yeu cau den ACV that bai nhung khong co thong tin loi.")
 
 
 def _extract_airport_from_route(route: str | None, flight_type: str) -> str | None:
@@ -57,11 +86,18 @@ def _fetch_acv_flights_for_terminal(
     else:
         warmup_params["departureStation"] = station_code
 
+    warmup_ok = True
     try:
-        session.get("https://acv.vn/vi/chuyen-bay", params=warmup_params, timeout=REQUEST_TIMEOUT)
+        _request_with_retry(
+            session,
+            "GET",
+            "https://acv.vn/vi/chuyen-bay",
+            params=warmup_params,
+        )
     except requests.exceptions.RequestException as exc:
+        warmup_ok = False
         print(f"Canh bao: Warm-up that bai (type={flight_type}, terminal={terminal}): {exc}")
-        return []
+        print("Canh bao: Tiep tuc goi API proxy du warm-up that bai.")
 
     rows = []
     for page_index in range(1, max_pages + 1):
@@ -84,7 +120,12 @@ def _fetch_acv_flights_for_terminal(
         }
 
         try:
-            response = session.post("https://acv.vn/api/proxy", json=proxy_body, timeout=REQUEST_TIMEOUT)
+            response = _request_with_retry(
+                session,
+                "POST",
+                "https://acv.vn/api/proxy",
+                json=proxy_body,
+            )
             response.raise_for_status()
             data = response.json().get("data", [])
         except requests.exceptions.RequestException as exc:
@@ -95,6 +136,11 @@ def _fetch_acv_flights_for_terminal(
             break
 
         if not data:
+            if page_index == 1 and not warmup_ok:
+                print(
+                    f"Canh bao: Khong co du lieu o trang 1 sau khi warm-up that bai "
+                    f"(type={flight_type}, terminal={terminal})."
+                )
             break
 
         rows.extend(data)
@@ -180,6 +226,7 @@ def main():
     df_departures = get_tia_flights(flight_type="departure", max_pages=20, flight_date=target_date)
 
     df_all = pd.concat([df_arrivals, df_departures], ignore_index=True)
+    print(df_all.head())
     if df_all.empty:
         print("TSN: Không thu thập được dữ liệu chuyến bay.")
         return
