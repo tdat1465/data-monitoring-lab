@@ -10,21 +10,53 @@ from db_utils import save_dataframe
 # ACV currently serves flight data via Next.js API proxy endpoints.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+CONNECT_TIMEOUT = 12
+READ_TIMEOUT = 30
+REQUEST_RETRIES = 3
+
 
 def _request_with_ssl_fallback(session: requests.Session, method: str, url: str, **kwargs) -> requests.Response:
-    try:
-        return session.request(method, url, timeout=20, **kwargs)
-    except requests.exceptions.SSLError as exc:
-        error_text = str(exc)
-        cert_expired_markers = [
-            "CERTIFICATE_VERIFY_FAILED",
-            "certificate verify failed",
-            "certificate has expired",
-        ]
-        if any(marker in error_text for marker in cert_expired_markers):
-            print("Canh bao: SSL certificate cua nguon da het han. Thu lai voi verify=False...")
-            return session.request(method, url, timeout=20, verify=False, **kwargs)
-        raise
+    last_exc: Exception | None = None
+    cert_expired_markers = [
+        "CERTIFICATE_VERIFY_FAILED",
+        "certificate verify failed",
+        "certificate has expired",
+    ]
+
+    for attempt in range(1, REQUEST_RETRIES + 1):
+        try:
+            return session.request(method, url, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT), **kwargs)
+        except requests.exceptions.SSLError as exc:
+            error_text = str(exc)
+            if any(marker in error_text for marker in cert_expired_markers):
+                try:
+                    print("Canh bao: SSL certificate cua nguon da het han. Thu lai voi verify=False...")
+                    return session.request(
+                        method,
+                        url,
+                        timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+                        verify=False,
+                        **kwargs,
+                    )
+                except requests.exceptions.RequestException as ssl_retry_exc:
+                    last_exc = ssl_retry_exc
+            else:
+                raise
+        except (
+            requests.exceptions.ConnectTimeout,
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.ConnectionError,
+        ) as exc:
+            last_exc = exc
+
+        if attempt < REQUEST_RETRIES:
+            wait_seconds = min(2 ** (attempt - 1), 4)
+            print(f"Canh bao: Loi ket noi den ACV (lan {attempt}/{REQUEST_RETRIES}). Thu lai sau {wait_seconds}s...")
+            time.sleep(wait_seconds)
+
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("Yeu cau den API that bai nhung khong co thong tin loi cu the.")
 
 
 def _search_acv_flights(
@@ -51,12 +83,19 @@ def _search_acv_flights(
         "method": "POST",
         "body": payload,
     }
-    response = _request_with_ssl_fallback(
-        session,
-        "POST",
-        "https://acv.vn/api/proxy",
-        json=proxy_body,
-    )
+    try:
+        response = _request_with_ssl_fallback(
+            session,
+            "POST",
+            "https://acv.vn/api/proxy",
+            json=proxy_body,
+        )
+    except requests.exceptions.RequestException as exc:
+        print(
+            "ACV API loi ket noi "
+            f"(type={flight_type}, terminal={terminal}, page={page_index}): {exc}"
+        )
+        return []
     if response.status_code != 200:
         print(f"ACV API loi status={response.status_code} (type={flight_type}, terminal={terminal}, page={page_index})")
         return []
