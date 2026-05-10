@@ -28,7 +28,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
+      - name: CI network diagnostics (ACV)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y dnsutils traceroute iputils-ping curl
+          echo "=== DNS lookup ==="
+          dig +short acv.vn || true
+          echo "=== traceroute (may be blocked) ==="
+          traceroute -m 30 acv.vn || tracepath acv.vn || true
+          echo "=== curl GET ==="
+          curl -vS --max-time 20 "https://acv.vn/vi/chuyen-bay?type=arrival&arrivalStation=SGN&flightDate=$(date -I)" || true
+          echo "=== curl POST proxy (HEAD only) ==="
+          curl -vS --max-time 20 -X POST "https://acv.vn/api/proxy" -H "Content-Type: application/json" -d '{"url":"/api/flights/search","method":"POST","body":{"flightDate":"'"$(date -I)"'","pageIndex":1,"pageSize":1,"langCode":"vi","terminal":"T3","type":"arrival"}}' || true
       - name: Run collectors
         run: |
           python "Data Collection + Processing/collect_all.py"

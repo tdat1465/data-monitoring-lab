@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from datetime import date, datetime
 import hashlib
 import json
@@ -11,6 +12,22 @@ from psycopg2.extras import execute_values
 
 def _get_database_url() -> str:
     database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return database_url
+
+    # Local fallback: read DATABASE_URL from .env next to this file.
+    env_path = Path(__file__).with_name(".env")
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key.strip() == "DATABASE_URL" and value.strip():
+                database_url = value.strip().strip('"').strip("'")
+                os.environ["DATABASE_URL"] = database_url
+                return database_url
+
     if not database_url:
         raise RuntimeError("Missing DATABASE_URL environment variable")
     return database_url
