@@ -1,113 +1,33 @@
 import requests
-import time
 import pandas as pd
 import re
-import urllib3
 
 from db_utils import save_dataframe
 
 
-# ACV currently serves flight data via Next.js API proxy endpoints.
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-CONNECT_TIMEOUT = 12
-READ_TIMEOUT = 30
-REQUEST_RETRIES = 3
+REQUEST_TIMEOUT = 30
+PAGE_SIZE = 15
+MAX_PAGES = 30
+TSN_TERMINALS = ["T1", "T3"]
 
 
-def _request_with_ssl_fallback(session: requests.Session, method: str, url: str, **kwargs) -> requests.Response:
-    last_exc: Exception | None = None
-    cert_expired_markers = [
-        "CERTIFICATE_VERIFY_FAILED",
-        "certificate verify failed",
-        "certificate has expired",
-    ]
-
-    for attempt in range(1, REQUEST_RETRIES + 1):
-        try:
-            return session.request(method, url, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT), **kwargs)
-        except requests.exceptions.SSLError as exc:
-            error_text = str(exc)
-            if any(marker in error_text for marker in cert_expired_markers):
-                try:
-                    print("Canh bao: SSL certificate cua nguon da het han. Thu lai voi verify=False...")
-                    return session.request(
-                        method,
-                        url,
-                        timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
-                        verify=False,
-                        **kwargs,
-                    )
-                except requests.exceptions.RequestException as ssl_retry_exc:
-                    last_exc = ssl_retry_exc
-            else:
-                raise
-        except (
-            requests.exceptions.ConnectTimeout,
-            requests.exceptions.ReadTimeout,
-            requests.exceptions.ConnectionError,
-        ) as exc:
-            last_exc = exc
-
-        if attempt < REQUEST_RETRIES:
-            wait_seconds = min(2 ** (attempt - 1), 4)
-            print(f"Canh bao: Loi ket noi den ACV (lan {attempt}/{REQUEST_RETRIES}). Thu lai sau {wait_seconds}s...")
-            time.sleep(wait_seconds)
-
-    if last_exc is not None:
-        raise last_exc
-    raise RuntimeError("Yeu cau den API that bai nhung khong co thong tin loi cu the.")
-
-
-def _search_acv_flights(
-    session: requests.Session,
-    flight_type: str,
-    flight_date: str,
-    terminal: str,
-    page_index: int,
-    page_size: int = 15,
-) -> list[dict]:
-    payload = {
-        "flightDate": flight_date,
-        "pageIndex": page_index,
-        "pageSize": page_size,
-        "langCode": "vi",
-        "terminal": terminal,
-        "flightNo": "",
-        "departureStation": "SGN" if flight_type == "departure" else "",
-        "arrivalStation": "SGN" if flight_type == "arrival" else "",
-        "type": flight_type,
-    }
-    proxy_body = {
-        "url": "/api/flights/search",
-        "method": "POST",
-        "body": payload,
-    }
-    try:
-        response = _request_with_ssl_fallback(
-            session,
-            "POST",
-            "https://acv.vn/api/proxy",
-            json=proxy_body,
-        )
-    except requests.exceptions.RequestException as exc:
-        print(
-            "ACV API loi ket noi "
-            f"(type={flight_type}, terminal={terminal}, page={page_index}): {exc}"
-        )
-        return []
-    if response.status_code != 200:
-        print(f"ACV API loi status={response.status_code} (type={flight_type}, terminal={terminal}, page={page_index})")
-        return []
-
-    try:
-        json_data = response.json()
-    except ValueError:
-        print(f"ACV API khong tra JSON hop le (type={flight_type}, terminal={terminal}, page={page_index})")
-        return []
-
-    data = json_data.get("data")
-    return data if isinstance(data, list) else []
+def _create_acv_session() -> requests.Session:
+    session = requests.Session()
+    session.headers.update(
+        {
+            "Accept": "*/*",
+            "Content-Type": "application/json",
+            "Accept-Language": "vi;q=0.9",
+            "Origin": "https://acv.vn",
+            "Referer": "https://acv.vn/vi/chuyen-bay",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/148.0.0.0 Safari/537.36"
+            ),
+        }
+    )
+    return session
 
 
 def _extract_airport_from_route(route: str | None, flight_type: str) -> str | None:
@@ -122,26 +42,68 @@ def _extract_airport_from_route(route: str | None, flight_type: str) -> str | No
     return destination if flight_type == "departure" else origin
 
 
-def _bootstrap_acv_session(session: requests.Session, flight_type: str, flight_date: str) -> None:
-    params = {
-        "type": flight_type,
-        "flightDate": flight_date,
-    }
-    if flight_type == "departure":
-        params["departureStation"] = "SGN"
+def _fetch_acv_flights_for_terminal(
+    session: requests.Session,
+    flight_type: str,
+    flight_date: str,
+    terminal: str,
+    station_code: str = "SGN",
+    page_size: int = PAGE_SIZE,
+    max_pages: int = MAX_PAGES,
+) -> list[dict]:
+    warmup_params = {"type": flight_type, "flightDate": flight_date, "terminal": terminal}
+    if flight_type == "arrival":
+        warmup_params["arrivalStation"] = station_code
     else:
-        params["arrivalStation"] = "SGN"
+        warmup_params["departureStation"] = station_code
 
-    _request_with_ssl_fallback(
-        session,
-        "GET",
-        "https://acv.vn/vi/chuyen-bay",
-        params=params,
-    )
+    try:
+        session.get("https://acv.vn/vi/chuyen-bay", params=warmup_params, timeout=REQUEST_TIMEOUT)
+    except requests.exceptions.RequestException as exc:
+        print(f"Canh bao: Warm-up that bai (type={flight_type}, terminal={terminal}): {exc}")
+        return []
+
+    rows = []
+    for page_index in range(1, max_pages + 1):
+        payload = {
+            "flightDate": flight_date,
+            "pageIndex": page_index,
+            "pageSize": page_size,
+            "langCode": "vi",
+            "terminal": terminal,
+            "flightNo": "",
+            "departureStation": station_code if flight_type == "departure" else "",
+            "arrivalStation": station_code if flight_type == "arrival" else "",
+            "type": flight_type,
+        }
+
+        proxy_body = {
+            "url": "/api/flights/search",
+            "method": "POST",
+            "body": payload,
+        }
+
+        try:
+            response = session.post("https://acv.vn/api/proxy", json=proxy_body, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            data = response.json().get("data", [])
+        except requests.exceptions.RequestException as exc:
+            print(f"Canh bao: API that bai (type={flight_type}, terminal={terminal}, page={page_index}): {exc}")
+            break
+        except ValueError as exc:
+            print(f"Canh bao: JSON khong hop le (type={flight_type}, terminal={terminal}, page={page_index}): {exc}")
+            break
+
+        if not data:
+            break
+
+        rows.extend(data)
+
+    return rows
 
 
-def get_tia_flights(flight_type="arrival", max_pages=20, flight_date: str | None = None):
-    session = requests.Session()
+def get_tia_flights(flight_type="arrival", max_pages=MAX_PAGES, flight_date: str | None = None):
+    session = _create_acv_session()
 
     if flight_date is None:
         flight_date = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d")
@@ -156,66 +118,42 @@ def get_tia_flights(flight_type="arrival", max_pages=20, flight_date: str | None
         print("Loại chuyến bay không hợp lệ!")
         return pd.DataFrame()
 
-    headers = {
-        "Accept": "*/*",
-        "Content-Type": "application/json",
-        "Accept-Language": "vi;q=0.9",
-        "Origin": "https://acv.vn",
-        "Referer": "https://acv.vn/vi/chuyen-bay",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
-    }
-    session.headers.update(headers)
-
-    all_flights = []
-    terminals = ["T1", "T3"]
+    all_raw_rows: list[dict] = []
     seen = set()
 
-    try:
-        try:
-            _bootstrap_acv_session(session, flight_type=flight_type, flight_date=flight_date)
-        except requests.exceptions.RequestException as exc:
-            print(f"Canh bao: Khong khoi tao duoc phien ACV truoc khi quet du lieu: {exc}")
+    for terminal in TSN_TERMINALS:
+        print(f"Dang lay du lieu {flight_type.upper()} - Terminal {terminal} - Ngay {flight_date}")
+        terminal_rows = _fetch_acv_flights_for_terminal(
+            session=session,
+            flight_type=flight_type,
+            flight_date=flight_date,
+            terminal=terminal,
+            max_pages=max_pages,
+        )
+        all_raw_rows.extend(terminal_rows)
 
-        for terminal in terminals:
-            print(f"Dang lay du lieu {flight_type.upper()} - Terminal {terminal} - Ngay {flight_date}")
-            for current_page in range(1, max_pages + 1):
-                flights = _search_acv_flights(
-                    session=session,
-                    flight_type=flight_type,
-                    flight_date=flight_date,
-                    terminal=terminal,
-                    page_index=current_page,
-                )
-
-                if not flights:
-                    break
-
-                for f in flights:
-                    route = f.get("route")
-                    airport = _extract_airport_from_route(route, flight_type)
-                    row = {
-                        "Direction": flight_direction,
-                        "Scheduled Time": f.get("gioKhoiHanh") if flight_type == "departure" else f.get("gioHaCanh"),
-                        "Estimated Time": None,
-                        "Airport": airport,
-                        "Flight Number": f.get("soHieuChuyenBay"),
-                        "Status": f.get("trangThai"),
-                    }
-                    dedupe_key = (
-                        row["Direction"],
-                        row["Scheduled Time"],
-                        row["Airport"],
-                        row["Flight Number"],
-                        row["Status"],
-                    )
-                    if dedupe_key not in seen:
-                        seen.add(dedupe_key)
-                        all_flights.append(row)
-
-                time.sleep(0.2)
-
-    except Exception as e:
-        print(f"Có lỗi xảy ra: {e}")
+    all_flights = []
+    for f in all_raw_rows:
+        route = f.get("route")
+        airport = _extract_airport_from_route(route, flight_type)
+        row = {
+            "Direction": flight_direction,
+            "Scheduled Time": f.get("gioKhoiHanh") if flight_type == "departure" else f.get("gioHaCanh"),
+            "Estimated Time": None,
+            "Airport": airport,
+            "Flight Number": f.get("soHieuChuyenBay"),
+            "Status": f.get("trangThai"),
+        }
+        dedupe_key = (
+            row["Direction"],
+            row["Scheduled Time"],
+            row["Airport"],
+            row["Flight Number"],
+            row["Status"],
+        )
+        if dedupe_key not in seen:
+            seen.add(dedupe_key)
+            all_flights.append(row)
 
     return pd.DataFrame(all_flights)
 
