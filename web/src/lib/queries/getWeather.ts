@@ -28,7 +28,7 @@ export async function getWeatherHistory(startDate?: string, endDate?: string): P
   const sql = `
     SELECT
       icao_code,
-      report_time_vn::timestamptz AT TIME ZONE '+07:00' AS report_time_vn,
+      report_time_vn::timestamptz AS report_time_vn,
       temperature_c,
       dew_point_c,
       wind_direction_deg,

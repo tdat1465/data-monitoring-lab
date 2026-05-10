@@ -36,10 +36,13 @@ export function WeatherTab({
     if (!rawWeatherHistory || rawWeatherHistory.length === 0) return [];
     
     return rawWeatherHistory.filter((row: any) => {
-      if (!appliedDateRange.start || !appliedDateRange.end) return true; 
+      if (!appliedDateRange.start || !appliedDateRange.end) return true;
+
       const reportTime = new Date(row.report_time_vn).getTime();
-      const startTime = new Date(appliedDateRange.start).setHours(0, 0, 0, 0);
-      const endTime = new Date(appliedDateRange.end).setHours(23, 59, 59, 999);
+      // So sánh với ICT boundary: 3/5 00:00 ICT = 2/5 17:00 UTC
+      const startTime = new Date(`${appliedDateRange.start}T00:00:00+07:00`).getTime();
+      const endTime   = new Date(`${appliedDateRange.end}T23:59:59.999+07:00`).getTime();
+
       return reportTime >= startTime && reportTime <= endTime;
     });
   }, [rawWeatherHistory, appliedDateRange]);
@@ -48,22 +51,24 @@ export function WeatherTab({
     if (!rawWeatherHistory || rawWeatherHistory.length === 0) return [];
 
     // Lọc theo ngày
-    let filtered = rawWeatherHistory.filter((row: any) => {
-      if (!appliedDateRange.start || !appliedDateRange.end) return true; 
+    // Bước filter trong processedData
+    const filtered = rawWeatherHistory.filter((row: any) => {
+      if (!appliedDateRange.start || !appliedDateRange.end) return true;
+
       const reportTime = new Date(row.report_time_vn).getTime();
-      const startTime = new Date(appliedDateRange.start).setHours(0, 0, 0, 0);
-      const endTime = new Date(appliedDateRange.end).setHours(23, 59, 59, 999);
+      const startTime = new Date(`${appliedDateRange.start}T00:00:00+07:00`).getTime();
+      const endTime   = new Date(`${appliedDateRange.end}T23:59:59.999+07:00`).getTime();
+
       return reportTime >= startTime && reportTime <= endTime;
     });
 
-    // Gom nhóm (Bucket) - Áp dụng cho TẤT CẢ các chế độ để đồng bộ cấu trúc
+    // Bước bucket — không cần bù giờ nữa, dùng thẳng
     const buckets: Record<string, any[]> = {};
     filtered.forEach((row: any) => {
-      const date = new Date(row.report_time_vn);
-      if (resolution === '30m') date.setMinutes(date.getMinutes() < 30 ? 0 : 30, 0, 0);
-      else if (resolution === '1h') date.setMinutes(0, 0, 0);
-      else if (resolution === '1d') date.setHours(0, 0, 0, 0);
-      // Chế độ 'raw' sẽ giữ nguyên thời gian gốc không làm tròn
+      const date = new Date(row.report_time_vn); // ✅ UTC đúng rồi
+      if (resolution === '30m') date.setUTCMinutes(date.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
+      else if (resolution === '1h') date.setUTCMinutes(0, 0, 0);
+      else if (resolution === '1d') date.setUTCHours(0, 0, 0, 0);
 
       const key = date.toISOString();
       if (!buckets[key]) buckets[key] = [];
