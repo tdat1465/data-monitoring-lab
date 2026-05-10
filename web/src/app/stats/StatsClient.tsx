@@ -1,14 +1,31 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { Flight } from '@/types/flight';
 import type { WeatherMETAR } from '@/types/weather';
 import { OverviewTab } from './components/OverviewTab';
 import { FlightTab } from './components/FlightTab';
 import { WeatherTab } from './components/WeatherTab';
 
-export function StatsClient({ flights, rawWeatherHistory }: { flights: Flight[], rawWeatherHistory: WeatherMETAR[] }) {
+export function StatsClient({ flights, rawWeatherHistory, serverDateRange }: { 
+  flights: Flight[], 
+  rawWeatherHistory: WeatherMETAR[],
+  serverDateRange: { start: string, end: string }
+}) {
   const [activeTab, setActiveTab] = useState<'overview' | 'weather' | 'flights'>('overview');
+
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const handleDateFilter = (newRange: { start: string, end: string }) => {
+    const params = new URLSearchParams();
+    if (newRange.start) params.set('start', newRange.start);
+    if (newRange.end) params.set('end', newRange.end);
+    
+    // Đẩy URL mới, page.tsx sẽ tự động chạy lại để fetch dữ liệu mới từ DB
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   return (
     <div className="space-y-6">
@@ -39,8 +56,8 @@ export function StatsClient({ flights, rawWeatherHistory }: { flights: Flight[],
 
       {/* Render Component tương ứng */}
       <div className="mt-6">
-        {activeTab === 'overview' && <OverviewTab flights={flights} rawWeatherHistory={rawWeatherHistory} />}
-        {activeTab === 'weather' && <WeatherTab rawWeatherHistory={rawWeatherHistory} />}
+        {activeTab === 'overview' && <OverviewTab flights={flights} rawWeatherHistory={rawWeatherHistory} onDateFilter={handleDateFilter} initialDateRange={serverDateRange}/>}
+        {activeTab === 'weather' && <WeatherTab rawWeatherHistory={rawWeatherHistory} onDateFilter={handleDateFilter} initialDateRange={serverDateRange} />}
         {activeTab === 'flights' && <FlightTab flights={flights} />}
       </div>
     </div>
