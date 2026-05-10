@@ -206,61 +206,63 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
   return (
     <div className="space-y-6">
       <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-600">Từ ngày:</label>
-            <input
-              type="date"
-              value={inputDateRange.start}
-              className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              onChange={(e) => setInputDateRange({ ...inputDateRange, start: e.target.value })}
-            />
-          </div>
+        <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm transition-all duration-300 hover:shadow-md hover:border-gray-300 space-y-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-600">Từ ngày:</label>
+              <input
+                type="date"
+                value={inputDateRange.start}
+                className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => setInputDateRange({ ...inputDateRange, start: e.target.value })}
+              />
+            </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-600">Đến ngày:</label>
-            <input
-              type="date"
-              value={inputDateRange.end}
-              className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              onChange={(e) => setInputDateRange({ ...inputDateRange, end: e.target.value })}
-            />
-          </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-600">Đến ngày:</label>
+              <input
+                type="date"
+                value={inputDateRange.end}
+                className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => setInputDateRange({ ...inputDateRange, end: e.target.value })}
+              />
+            </div>
 
-          <button
-            onClick={() => setAppliedDateRange(inputDateRange)}
-            className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            Lọc
-          </button>
-
-          {(inputDateRange.start || inputDateRange.end) && (
             <button
-              onClick={() => {
-                const defaultRange = getInitialDates();
-                setInputDateRange(defaultRange);
-                setAppliedDateRange(defaultRange);
-              }}
-              className="text-sm text-red-600 hover:underline ml-auto"
+              onClick={() => setAppliedDateRange(inputDateRange)}
+              className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
-              Xóa lọc
+              Lọc
             </button>
-          )}
-        </div>
 
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-600">Sân bay:</label>
-            <select
-              value={selectedAirport}
-              onChange={(e) => setSelectedAirport(e.target.value as any)}
-              className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="ALL">Tất cả sân bay</option>
-              <option value="NB">Nội Bài</option>
-              <option value="DN">Đà Nẵng</option>
-              <option value="TSN">Tân Sơn Nhất</option>
-            </select>
+            {(inputDateRange.start || inputDateRange.end) && (
+              <button
+                onClick={() => {
+                  const defaultRange = getInitialDates();
+                  setInputDateRange(defaultRange);
+                  setAppliedDateRange(defaultRange);
+                }}
+                className="text-sm text-red-600 hover:underline ml-auto"
+              >
+                Xóa lọc
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-600">Sân bay:</label>
+              <select
+                value={selectedAirport}
+                onChange={(e) => setSelectedAirport(e.target.value as any)}
+                className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ALL">Tất cả sân bay</option>
+                <option value="NB">Nội Bài</option>
+                <option value="DN">Đà Nẵng</option>
+                <option value="TSN">Tân Sơn Nhất</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
