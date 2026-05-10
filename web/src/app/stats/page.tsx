@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 // import { getFlightsWithPredictions } from '@/lib/queries/getFlights';
 // import { getWeatherHistory } from '@/lib/queries/getWeather';
 // import { StatsClient } from './StatsClient';
@@ -20,6 +21,9 @@
 
 
 import { getFlightsWithPredictions } from '@/lib/queries/getFlights';
+=======
+import { getAllFlights } from '@/lib/queries/getFlights';
+>>>>>>> Stashed changes
 import { getWeatherHistory } from '@/lib/queries/getWeather';
 import { StatsClient } from './StatsClient';
 
@@ -44,12 +48,22 @@ export default async function StatsPage({
   const startDate = params.start || formatDate(sevenDaysAgo);
   const endDate = params.end || formatDate(today);
 
+<<<<<<< Updated upstream
   let flights: Awaited<ReturnType<typeof getFlightsWithPredictions>> = [];
   let rawWeatherHistory: Awaited<ReturnType<typeof getWeatherHistory>> = [];
 
   try {
     flights = await getFlightsWithPredictions();
     rawWeatherHistory = await getWeatherHistory(startDate, endDate);
+=======
+export default async function StatsPage() {
+  let flights: Awaited<ReturnType<typeof getAllFlights>> = [];
+  let rawWeatherHistory: Awaited<ReturnType<typeof getWeatherHistory>> = [];
+
+  try {
+    flights = await getAllFlights();
+    rawWeatherHistory = await getWeatherHistory();
+>>>>>>> Stashed changes
   } catch (err) {
     console.error('Failed to load stats:', err);
   }

@@ -43,6 +43,36 @@ export async function getFlightsWithPredictions(date?: string): Promise<Flight[]
   return result.rows as unknown as Flight[];
 }
 
+// Get all historical flight data (no date limit)
+export async function getAllFlights(): Promise<Flight[]> {
+  const sql = `
+    SELECT
+      s.flight_key,
+      s.flight_number,
+      s.source_airport,
+      s.direction,
+      s.route_airport_std,
+      s.scheduled_dt::timestamptz AT TIME ZONE '+07:00' AS scheduled_dt,
+      s.estimated_dt::timestamptz AT TIME ZONE '+07:00' AS estimated_dt,
+      s.status_raw,
+      s.status_group,
+      s.temperature_c,
+      s.visibility_miles,
+      s.wind_speed_kt,
+      s.cloud_cover,
+      s.delay_minutes,
+      s.label_delay,
+      p.predict_delay_minutes,
+      p.predicted_at
+    FROM flights_current_snapshot s
+    LEFT JOIN flights_predictions p ON s.flight_key = p.flight_key
+    ORDER BY s.flight_date DESC, s.source_airport, s.scheduled_dt ASC
+  `;
+
+  const result = await query(sql);
+  return result.rows as unknown as Flight[];
+}
+
 export async function getFlightsByHistory(days: number = 7): Promise<Flight[]> {
   const sql = `
     SELECT

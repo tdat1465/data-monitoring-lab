@@ -16,6 +16,8 @@ export interface Flight {
   predicted_at: string | null;
   delay_minutes: number | null;
   label_delay: number | null;
+  airline_code?: string;
+  scheduled_hour?: number;
 }
 
 export interface FlightWithPrediction extends Flight {
