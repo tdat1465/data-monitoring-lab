@@ -122,6 +122,24 @@ def _extract_airport_from_route(route: str | None, flight_type: str) -> str | No
     return destination if flight_type == "departure" else origin
 
 
+def _bootstrap_acv_session(session: requests.Session, flight_type: str, flight_date: str) -> None:
+    params = {
+        "type": flight_type,
+        "flightDate": flight_date,
+    }
+    if flight_type == "departure":
+        params["departureStation"] = "SGN"
+    else:
+        params["arrivalStation"] = "SGN"
+
+    _request_with_ssl_fallback(
+        session,
+        "GET",
+        "https://acv.vn/vi/chuyen-bay",
+        params=params,
+    )
+
+
 def get_tia_flights(flight_type="arrival", max_pages=20, flight_date: str | None = None):
     session = requests.Session()
 
@@ -139,15 +157,12 @@ def get_tia_flights(flight_type="arrival", max_pages=20, flight_date: str | None
         return pd.DataFrame()
 
     headers = {
-        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept": "*/*",
         "Content-Type": "application/json",
-        "Accept-Language": "vi;q=0.5",
-        "Connection": "keep-alive",
-        "Host": "acv.vn",
+        "Accept-Language": "vi;q=0.9",
         "Origin": "https://acv.vn",
         "Referer": "https://acv.vn/vi/chuyen-bay",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-        "X-Requested-With": "XMLHttpRequest"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
     }
     session.headers.update(headers)
 
@@ -156,6 +171,11 @@ def get_tia_flights(flight_type="arrival", max_pages=20, flight_date: str | None
     seen = set()
 
     try:
+        try:
+            _bootstrap_acv_session(session, flight_type=flight_type, flight_date=flight_date)
+        except requests.exceptions.RequestException as exc:
+            print(f"Canh bao: Khong khoi tao duoc phien ACV truoc khi quet du lieu: {exc}")
+
         for terminal in terminals:
             print(f"Dang lay du lieu {flight_type.upper()} - Terminal {terminal} - Ngay {flight_date}")
             for current_page in range(1, max_pages + 1):
