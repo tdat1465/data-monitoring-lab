@@ -3,3 +3,9 @@ pandas
 beautifulsoup4
 psycopg2-binary
 tzdata
+xgboost
+lightgbm
+catboost
+optuna
+scikit-learn
+joblib
