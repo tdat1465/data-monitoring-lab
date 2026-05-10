@@ -2,103 +2,158 @@ import requests
 import time
 import pandas as pd
 import re
+import urllib3
 
 from db_utils import save_dataframe
 
 
-def _extract_view_dates(view_html: str) -> dict[str, str]:
-    def _get(cls: str) -> str | None:
-        m = re.search(rf'<span\s+class="{re.escape(cls)}">([^<]+)</span>', view_html)
-        return m.group(1).strip() if m else None
+# ACV currently serves flight data via Next.js API proxy endpoints.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    values = {
-        "LastModifiedDate": _get("LastModifiedDate"),
-        "FlightViewLastModifiedDate": _get("FlightViewLastModifiedDate"),
-        "FlightViewTemplateLastModifiedDate": _get("FlightViewTemplateLastModifiedDate"),
+
+def _request_with_ssl_fallback(session: requests.Session, method: str, url: str, **kwargs) -> requests.Response:
+    try:
+        return session.request(method, url, timeout=20, **kwargs)
+    except requests.exceptions.SSLError as exc:
+        error_text = str(exc)
+        cert_expired_markers = [
+            "CERTIFICATE_VERIFY_FAILED",
+            "certificate verify failed",
+            "certificate has expired",
+        ]
+        if any(marker in error_text for marker in cert_expired_markers):
+            print("Canh bao: SSL certificate cua nguon da het han. Thu lai voi verify=False...")
+            return session.request(method, url, timeout=20, verify=False, **kwargs)
+        raise
+
+
+def _search_acv_flights(
+    session: requests.Session,
+    flight_type: str,
+    flight_date: str,
+    terminal: str,
+    page_index: int,
+    page_size: int = 15,
+) -> list[dict]:
+    payload = {
+        "flightDate": flight_date,
+        "pageIndex": page_index,
+        "pageSize": page_size,
+        "langCode": "vi",
+        "terminal": terminal,
+        "flightNo": "",
+        "departureStation": "SGN" if flight_type == "departure" else "",
+        "arrivalStation": "SGN" if flight_type == "arrival" else "",
+        "type": flight_type,
     }
-    return {k: v for k, v in values.items() if v is not None}
+    proxy_body = {
+        "url": "/api/flights/search",
+        "method": "POST",
+        "body": payload,
+    }
+    response = _request_with_ssl_fallback(
+        session,
+        "POST",
+        "https://acv.vn/api/proxy",
+        json=proxy_body,
+    )
+    if response.status_code != 200:
+        print(f"ACV API loi status={response.status_code} (type={flight_type}, terminal={terminal}, page={page_index})")
+        return []
 
-def get_tia_flights(flight_type="arrival", max_pages=2):
+    try:
+        json_data = response.json()
+    except ValueError:
+        print(f"ACV API khong tra JSON hop le (type={flight_type}, terminal={terminal}, page={page_index})")
+        return []
+
+    data = json_data.get("data")
+    return data if isinstance(data, list) else []
+
+
+def _extract_airport_from_route(route: str | None, flight_type: str) -> str | None:
+    if not route:
+        return None
+
+    parts = re.split(r"\s*-\s*", route, maxsplit=1)
+    if len(parts) < 2:
+        return route.strip()
+
+    origin, destination = parts[0].strip(), parts[1].strip()
+    return destination if flight_type == "departure" else origin
+
+
+def get_tia_flights(flight_type="arrival", max_pages=20, flight_date: str | None = None):
     session = requests.Session()
-    
-    # 1. Xác định URL / computerName dựa trên chiều bay
+
+    if flight_date is None:
+        flight_date = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d")
+
     if flight_type == "arrival":
-        referer_url = "https://tia.vietnamairport.vn/arrivals-vn"
         print("\n🛬 ĐANG LẤY DỮ LIỆU CHIỀU ĐẾN (ARRIVALS) 🛬")
         flight_direction = "Arrival"
-        computer_name = "T2AOSA01A"
     elif flight_type == "departure":
-        referer_url = "https://tia.vietnamairport.vn/departures-vn"
         print("\n🛫 ĐANG LẤY DỮ LIỆU CHIỀU ĐI (DEPARTURES) 🛫")
         flight_direction = "Departure"
-        computer_name = "T2AOSD01A"
     else:
         print("Loại chuyến bay không hợp lệ!")
         return pd.DataFrame()
 
     headers = {
         "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Content-Type": "application/json",
         "Accept-Language": "vi;q=0.5",
         "Connection": "keep-alive",
-        "Host": "tia.vietnamairport.vn",
-        "Origin": "https://tia.vietnamairport.vn",
-        "Referer": referer_url, # Cực kỳ quan trọng: Báo cho server biết ta đang ở trang nào
+        "Host": "acv.vn",
+        "Origin": "https://acv.vn",
+        "Referer": "https://acv.vn/vi/chuyen-bay",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
         "X-Requested-With": "XMLHttpRequest"
     }
     session.headers.update(headers)
 
-    url_get_time = "https://tia.vietnamairport.vn/FlightSchedule/getTime"
-    url_get_data = "https://tia.vietnamairport.vn/FlightSchedule/getData"
-    url_get_view = "https://tia.vietnamairport.vn/FlightSchedule/getFlightView"
-
     all_flights = []
+    terminals = ["T1", "T3"]
+    seen = set()
 
     try:
-        # 2. Truy cập trang theo chiều bay + tải view để server khởi tạo session đúng
-        session.get(referer_url)
-        view_res = session.post(url_get_view, data={"computerName": computer_name})
-        view_dates = _extract_view_dates(view_res.text)
+        for terminal in terminals:
+            print(f"Dang lay du lieu {flight_type.upper()} - Terminal {terminal} - Ngay {flight_date}")
+            for current_page in range(1, max_pages + 1):
+                flights = _search_acv_flights(
+                    session=session,
+                    flight_type=flight_type,
+                    flight_date=flight_date,
+                    terminal=terminal,
+                    page_index=current_page,
+                )
 
-        if not {"LastModifiedDate", "FlightViewLastModifiedDate", "FlightViewTemplateLastModifiedDate"}.issubset(view_dates):
-            raise RuntimeError(
-                f"Không trích xuất đủ LastModifiedDate từ getFlightView (flight_type={flight_type})."
-            )
+                if not flights:
+                    break
 
-        # 3. Khởi tạo luồng (Reset biến đếm trang)
-        print("Đang khởi tạo kết nối (getTime)...")
-        session.post(url_get_time)
-
-        # 4. Vòng lặp quét các trang
-        for current_page in range(1, max_pages + 1):
-            print(f"--- Lấy dữ liệu TRANG {current_page} ---")
-            
-            payload_data = {
-                "computerName": computer_name,
-                "page": current_page,
-                **view_dates,
-            }
-            
-            response = session.post(url_get_data, data=payload_data)
-            
-            if response.status_code == 200:
-                json_data = response.json() 
-                flights = json_data.get("Flights", [])
-                
                 for f in flights:
-                    all_flights.append({
+                    route = f.get("route")
+                    airport = _extract_airport_from_route(route, flight_type)
+                    row = {
                         "Direction": flight_direction,
-                        "Scheduled Time": f.get("Scheduled"),
-                        "Estimated Time": f.get("Estimated"),
-                        "Airport": f.get("Airport"),
-                        "Flight Number": f.get("FlightNo"),
-                        "Status": f.get("RemarkVn")
-                    })
-            else:
-                print(f"Lỗi: {response.status_code}")
-                break
-            
-            time.sleep(1) # Nghỉ 1s tránh bị chặn IP
+                        "Scheduled Time": f.get("gioKhoiHanh") if flight_type == "departure" else f.get("gioHaCanh"),
+                        "Estimated Time": None,
+                        "Airport": airport,
+                        "Flight Number": f.get("soHieuChuyenBay"),
+                        "Status": f.get("trangThai"),
+                    }
+                    dedupe_key = (
+                        row["Direction"],
+                        row["Scheduled Time"],
+                        row["Airport"],
+                        row["Flight Number"],
+                        row["Status"],
+                    )
+                    if dedupe_key not in seen:
+                        seen.add(dedupe_key)
+                        all_flights.append(row)
+
+                time.sleep(0.2)
 
     except Exception as e:
         print(f"Có lỗi xảy ra: {e}")
@@ -122,8 +177,10 @@ def _to_db_schema(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
-    df_arrivals = get_tia_flights(flight_type="arrival", max_pages=2)
-    df_departures = get_tia_flights(flight_type="departure", max_pages=2)
+    target_date = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d")
+
+    df_arrivals = get_tia_flights(flight_type="arrival", max_pages=20, flight_date=target_date)
+    df_departures = get_tia_flights(flight_type="departure", max_pages=20, flight_date=target_date)
 
     df_all = pd.concat([df_arrivals, df_departures], ignore_index=True)
     if df_all.empty:
