@@ -6,6 +6,7 @@ import {
   FlightStatusDonutChart,
 } from './flight_charts/FlightStatusDonutChart';
 import { AirlineDelayBarChart } from './flight_charts/AirlineDelayBarChart';
+import { AirportHourlyStackedBarChart } from './flight_charts/AirportHourlyStackedBarChart';
 import { HourlyDelayHeatmap } from './flight_charts/HourlyDelayHeatmap';
 import { DelayMinuteTreemap } from './flight_charts/DelayMinuteTreemap';
 import { RoutePerformanceTable } from './flight_charts/RoutePerformanceTable';
@@ -288,13 +289,18 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
         </div>
       </div>
 
-      {/* Row 2: Airline & Route */}
+      {/* Row 2: Airport hourly stacked chart */}
+      <div>
+        <AirportHourlyStackedBarChart data={filteredNormalized} />
+      </div>
+
+      {/* Row 3: Airline & Route */}
       <div className="grid grid-cols-2 gap-4">
         <AirlineDelayBarChart data={processedData.airlinePerf} />
         <RoutePerformanceTable data={processedData.routePerf} />
       </div>
 
-      {/* Row 3: Time & Severity */}
+      {/* Row 4: Time & Severity */}
       <div className="space-y-4">
         <div>
           <HourlyDelayHeatmap data={processedData.heatmapData} />
