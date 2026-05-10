@@ -102,6 +102,8 @@ export function OverviewTab({
     return <div className="p-8 text-center text-gray-500">Đang chuẩn bị dữ liệu tổng quan...</div>;
   }
 
+  console.log('overview flights sample', flights[30], flights[31], flights[32]);
+  const getDelayFlag = (flight: Flight) => Number(flight.label_delay ?? 0) === 1;
   // --- Compute flight + ML + weather KPIs ---
   const flightsInRange = flights.filter(f => {
     if (!appliedDateRange.start || !appliedDateRange.end) return true;
@@ -113,7 +115,7 @@ export function OverviewTab({
   });
 
   const totalFlights = flightsInRange.length;
-  const delayedCount = flightsInRange.filter(f => (f.label_delay ?? 0) === 1).length;
+  const delayedCount = flightsInRange.filter(getDelayFlag).length;
   const delayRate = totalFlights ? (delayedCount / totalFlights) * 100 : 0;
 
   // Weather KPIs from filteredData
@@ -127,6 +129,9 @@ export function OverviewTab({
   baseDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
   const twoHoursLater = new Date(baseDate.getTime() + 2 * 60 * 60 * 1000);
   const airports = ['NB','DN','TSN'];
+  const getAirlineCode = (flight: Flight) => {
+    return flight.airline_code ?? (flight.flight_number ? String(flight.flight_number).match(/^([A-Z0-9]{2})/)?.[0] ?? 'UNK' : 'UNK');
+  };
 
   // build 15-min buckets for the next 2 hours (date from filter, time from now)
   const intervalMins = 15;
@@ -153,10 +158,10 @@ export function OverviewTab({
   // Airline treemap data
   const airlineAgg: Record<string, { flights: number; delayed: number }> = {};
   flightsInRange.forEach((f) => {
-    const a = f.airline_code ?? 'UNK';
+    const a = getAirlineCode(f);
     airlineAgg[a] = airlineAgg[a] || { flights: 0, delayed: 0 };
     airlineAgg[a].flights += 1;
-    if ((f.label_delay ?? 0) === 1) airlineAgg[a].delayed += 1;
+    if (getDelayFlag(f)) airlineAgg[a].delayed += 1;
   });
 
   const treemapNodes = Object.entries(airlineAgg).map(([k,v]) => ({
@@ -169,17 +174,17 @@ export function OverviewTab({
   const airportAirlineAgg: Record<string, Record<string, { flights: number; delayed: number }>> = {};
   flightsInRange.forEach((f) => {
     const ap = f.source_airport ?? 'UNK';
-    const a = f.airline_code ?? 'UNK';
+    const a = getAirlineCode(f);
     airportAirlineAgg[ap] = airportAirlineAgg[ap] || {};
     airportAirlineAgg[ap][a] = airportAirlineAgg[ap][a] || { flights: 0, delayed: 0 };
     airportAirlineAgg[ap][a].flights += 1;
-    if ((f.label_delay ?? 0) === 1) airportAirlineAgg[ap][a].delayed += 1;
+    if (getDelayFlag(f)) airportAirlineAgg[ap][a].delayed += 1;
   });
 
   // Radar clock: counts of delayed flights per hour
   const radarHours = Array.from({ length: 24 }, (_,i)=> ({ hour: i, count: 0 }));
   flightsInRange.forEach((f) => {
-    if ((f.label_delay ?? 0) === 1 && f.scheduled_dt) {
+    if (getDelayFlag(f) && f.scheduled_dt) {
       const h = new Date(f.scheduled_dt).getHours();
       radarHours[h].count += 1;
     }

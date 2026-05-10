@@ -16,7 +16,9 @@ export function AirlineEfficiencyTreemap({ nodes, byAirport }: { nodes: Array<{ 
     return Object.entries(byAirport).map(([ap, airlines]) => ({
       name: ap,
       children: Object.entries(airlines).map(([code, agg]) => ({
-        name: code,
+        name: `${ap} - ${code}`,
+        airport: ap,
+        airline: code,
         size: agg.flights,
         delayRate: agg.flights ? (agg.delayed / agg.flights) : 0,
       }))
@@ -26,7 +28,7 @@ export function AirlineEfficiencyTreemap({ nodes, byAirport }: { nodes: Array<{ 
   const data = useMemo(() => nodes.map(n => ({ name: n.name, size: n.size, delayRate: n.delayRate })), [nodes]);
 
   const CustomizedContent = (props: any) => {
-    const { x, y, width, height, name, depth, children, delayRate } = props;
+    const { x, y, width, height, name, airport, airline, children, delayRate } = props;
     const isLeaf = !children || children.length === 0;
     const fill = getColor(delayRate ?? 0);
     if (isLeaf) {
@@ -34,7 +36,10 @@ export function AirlineEfficiencyTreemap({ nodes, byAirport }: { nodes: Array<{ 
         <g>
           <rect x={x} y={y} width={width} height={height} fill={fill} stroke="#fff" />
           {width > 60 && height > 30 && (
-            <text x={x + 6} y={y + 18} fill="#fff" fontSize={12} fontWeight={700}>{name}</text>
+            <>
+              <text x={x + 6} y={y + 16} fill="#fff" fontSize={11} fontWeight={700}>{airport && airline ? airport : name}</text>
+              <text x={x + 6} y={y + 31} fill="#fff" fontSize={11} fontWeight={600}>{airport && airline ? airline : ''}</text>
+            </>
           )}
         </g>
       );
