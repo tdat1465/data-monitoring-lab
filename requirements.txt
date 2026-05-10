@@ -9,3 +9,4 @@ catboost
 optuna
 scikit-learn
 joblib
+curl_cffi
