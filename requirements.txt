@@ -3,10 +3,10 @@ pandas
 beautifulsoup4
 psycopg2-binary
 tzdata
-xgboost
+xgboost==2.0.3
 lightgbm
 catboost
 optuna
-scikit-learn
+scikit-learn==1.3.1
 joblib
 curl_cffi
