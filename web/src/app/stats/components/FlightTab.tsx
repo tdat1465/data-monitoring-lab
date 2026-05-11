@@ -5,15 +5,20 @@ import type { Flight } from '@/types/flight';
 import {
   FlightStatusDonutChart,
 } from './flight_charts/FlightStatusDonutChart';
+import { DateFilterBar } from './DateFilterBar';
 import { AirlineDelayBarChart } from './flight_charts/AirlineDelayBarChart';
 import { AirportHourlyStackedBarChart } from './flight_charts/AirportHourlyStackedBarChart';
 import { HourlyDelayHeatmap } from './flight_charts/HourlyDelayHeatmap';
 import { DelayMinuteTreemap } from './flight_charts/DelayMinuteTreemap';
 import { RoutePerformanceTable } from './flight_charts/RoutePerformanceTable';
 
-type DateRange = { start?: string; end?: string };
+type DateRange = { start: string; end: string };
 
-export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Flight[]; flights?: Flight[] }) {
+export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDateRange }: { 
+  rawFlightData?: Flight[]; 
+  flights?: Flight[];
+  onDateFilter?: (range: DateRange) => void; 
+  initialDateRange?: DateRange;}) {
   const dataSource = flights ?? rawFlightData;
 
   const getInitialDates = () => {
@@ -29,6 +34,7 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
     return { start: formatDate(sevenDaysAgo), end: formatDate(today) };
   };
 
+  const defaultDates = initialDateRange || getInitialDates();
   const [inputDateRange, setInputDateRange] = useState<DateRange>(getInitialDates);
   const [appliedDateRange, setAppliedDateRange] = useState<DateRange>(getInitialDates);
   const [selectedAirport, setSelectedAirport] = useState<'ALL' | 'NB' | 'DN' | 'TSN'>('ALL');
@@ -84,6 +90,9 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
   // Event handlers
   const handleApplyFilter = () => {
     setAppliedDateRange(inputDateRange);
+    if (onDateFilter) {
+      onDateFilter(inputDateRange);
+    }
   };
 
   const handleClearFilter = () => {
@@ -91,6 +100,9 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
     setInputDateRange(defaultRange);
     setAppliedDateRange(defaultRange);
     setResolution('raw');
+    if (onDateFilter) {
+      onDateFilter(defaultRange);
+    }
   };
 
   const handleToday = () => {
@@ -272,97 +284,19 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
 
   return (
     <div className="space-y-6">
-      <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm space-y-4">
-        <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm transition-all duration-300 hover:shadow-md hover:border-gray-300 space-y-4">
-          {/* ROW 1: Date inputs + buttons */}
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-600">Từ ngày:</label>
-              <input
-                type="date"
-                value={inputDateRange.start}
-                className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                onChange={(e) => setInputDateRange({ ...inputDateRange, start: e.target.value })}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-600">Đến ngày:</label>
-              <input
-                type="date"
-                value={inputDateRange.end}
-                className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                onChange={(e) => setInputDateRange({ ...inputDateRange, end: e.target.value })}
-              />
-            </div>
-
-            <button
-              onClick={handleApplyFilter}
-              className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              Lọc
-            </button>
-
-            <button
-              onClick={handleToday}
-              className="px-4 py-1.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-            >
-              Hôm nay
-            </button>
-
-            {(inputDateRange.start || inputDateRange.end) && (
-              <button
-                onClick={handleClearFilter}
-                className="text-sm text-red-600 hover:underline ml-auto"
-              >
-                Xóa lọc
-              </button>
-            )}
-          </div>
-
-          {/* ROW 2: Airport + Resolution */}
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-600">Sân bay:</label>
-              <select
-                value={selectedAirport}
-                onChange={(e) => setSelectedAirport(e.target.value as any)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="ALL">Tất cả sân bay</option>
-                <option value="NB">Nội Bài (NB)</option>
-                <option value="DN">Đà Nẵng (DN)</option>
-                <option value="TSN">Tân Sơn Nhất (TSN)</option>
-              </select>
-            </div>
-
-            <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-600">Hiển thị:</span>
-              <div className="flex bg-gray-100 p-1 rounded-lg">
-                {[
-                  { label: 'Gốc', value: 'raw' },
-                  { label: '1 Giờ', value: '1h' },
-                  { label: '1 Ngày', value: '1d' },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setResolution(opt.value as any)}
-                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                      resolution === opt.value
-                        ? 'bg-white shadow-sm text-blue-600'
-                        : 'text-gray-500'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <DateFilterBar
+        inputDateRange={inputDateRange}
+        setInputDateRange={setInputDateRange}
+        resolution={resolution}
+        setResolution={setResolution}
+        onApply={handleApplyFilter}
+        onClear={handleClearFilter}
+        onToday={handleToday}
+        selectedAirport={selectedAirport}
+        onAirportChange={(airport) => {
+          setSelectedAirport((airport as any) ?? 'ALL');
+        }}
+      />
 
       {/* Row 1: KPIs + Donut */}
       <div className="grid grid-cols-12 gap-4">
