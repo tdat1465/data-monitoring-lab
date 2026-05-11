@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import {
-  LineChart,
+  LineChart, // Dùng lại LineChart thuần
   Line,
   XAxis,
   YAxis,
@@ -15,81 +15,72 @@ import {
 export function AirportComparisonChart({ rawWeatherHistory = [] }: any) {
   
   const chartData = useMemo(() => {
-    // Biến rawWeatherHistory lúc này thực chất là processedData (đã gom nhóm 30p, 1h, 1d) từ WeatherTab truyền xuống.
-    // Nên mình chỉ cần lặp qua (map) và đổi tên cho dễ hiểu để Recharts vẽ thôi.
     return rawWeatherHistory.map((row: any) => {
-      // Định dạng lại thời gian hiển thị (ví dụ: "08:00 09/05")
       const dateObj = new Date(row.report_time_vn);
       const timeLabel = `${dateObj.getHours()}:${dateObj.getMinutes().toString().padStart(2, '0')} ${dateObj.getDate()}/${dateObj.getMonth() + 1}`;
 
       return {
         time: timeLabel,
-        // Lấy các giá trị VVNB, VVDN, VVTS đã tính trung bình từ WeatherTab
-        'Nội Bài': row.VVNB !== undefined ? row.VVNB : null, 
-        'Đà Nẵng': row.VVDN !== undefined ? row.VVDN : null,
-        'Tân Sơn Nhất': row.VVTS !== undefined ? row.VVTS : null,
+        'Nhiệt độ NB (°C)': row.VVNB !== undefined ? row.VVNB : null, 
+        'Nhiệt độ ĐN (°C)': row.VVDN !== undefined ? row.VVDN : null,
+        'Nhiệt độ TSN (°C)': row.VVTS !== undefined ? row.VVTS : null,
+        'Delay NB (%)': row.Delay_NB !== undefined ? row.Delay_NB : null,
+        'Delay ĐN (%)': row.Delay_DN !== undefined ? row.Delay_DN : null,
+        'Delay TSN (%)': row.Delay_TSN !== undefined ? row.Delay_TSN : null,
       };
     });
   }, [rawWeatherHistory]);
 
+  // Màu sắc thống nhất cho từng sân bay
+  const colors = { NB: '#3b82f6', DN: '#10b981', TSN: '#fb923c' };
+
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
-      <h2 className="mb-6 text-xl font-bold text-gray-800">So sánh Nhiệt độ giữa các Sân bay</h2>
-      <div className="w-full h-[430px]">
-        <ResponsiveContainer width="100%" height={430}>
-          {/* Chuyển về LineChart */}
-          <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-            <XAxis 
-              dataKey="time" 
-              minTickGap={60} 
-              tick={{ fontSize: 11, fill: '#6b7280' }} 
-              angle={-20} 
-              textAnchor="end"
-            />
-            <YAxis 
-              domain={['dataMin - 1', 'dataMax + 1']} 
-              tick={{ fontSize: 12, fill: '#6b7280' }} 
-            />
-            <Tooltip 
-              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-            />
-            <Legend verticalAlign="top" height={40} />
-            
-            {/* 
-              Mỗi sân bay một đường:
-              - connectNulls={true}: Cực kỳ quan trọng để đường không bị đứt đoạn 
-              - dot={false}: Bỏ dấu chấm để đường nhìn thanh thoát hơn
-            */}
-            <Line 
-              type="monotone" 
-              dataKey="Nội Bài" 
-              stroke="#3b82f6" 
-              strokeWidth={3} 
-              dot={false} 
-              connectNulls={true} 
-              activeDot={{ r: 6 }}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="Đà Nẵng" 
-              stroke="#10b981" 
-              strokeWidth={3} 
-              dot={false} 
-              connectNulls={true} 
-              activeDot={{ r: 6 }}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="Tân Sơn Nhất" 
-              stroke="#fb923c" 
-              strokeWidth={3} 
-              dot={false} 
-              connectNulls={true} 
-              activeDot={{ r: 6 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+      <h2 className="mb-4 text-xl font-bold text-gray-800">Tương quan Nhiệt độ và Tỉ lệ Trễ chuyến</h2>
+      
+      <div className="flex flex-col gap-4">
+        
+        {/* --- BIỂU ĐỒ 1: NHIỆT ĐỘ --- */}
+        <div className="w-full h-[220px]">
+          <h3 className="text-sm font-semibold text-gray-500 mb-1 ml-4">Nhiệt độ (°C)</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            {/* Sử dụng syncId="weather-delay-sync" để đồng bộ rê chuột */}
+            <LineChart data={chartData} syncId="weather-delay-sync" margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+              {/* Ẩn tick của XAxis ở biểu đồ trên để tiết kiệm không gian */}
+              <XAxis dataKey="time" tick={false} axisLine={false} />
+              <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={{ fontSize: 12, fill: '#6b7280' }} width={40}/>
+              <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+              <Legend verticalAlign="top" height={30} wrapperStyle={{ fontSize: '12px' }}/>
+              
+              <Line type="monotone" dataKey="Nhiệt độ NB (°C)" stroke={colors.NB} strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Nhiệt độ ĐN (°C)" stroke={colors.DN} strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Nhiệt độ TSN (°C)" stroke={colors.TSN} strokeWidth={2} dot={false} connectNulls={true} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* --- BIỂU ĐỒ 2: TỈ LỆ TRỄ CHUYẾN --- */}
+        <div className="w-full h-[250px]">
+          <h3 className="text-sm font-semibold text-gray-500 mb-1 ml-4">Tỉ lệ Trễ chuyến (%)</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            {/* Cùng syncId với biểu đồ trên */}
+            <LineChart data={chartData} syncId="weather-delay-sync" margin={{ top: 5, right: 20, left: 0, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+              {/* Hiển thị XAxis đầy đủ ở biểu đồ dưới cùng */}
+              <XAxis dataKey="time" minTickGap={40} tick={{ fontSize: 11, fill: '#6b7280' }} angle={-20} textAnchor="end" />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#6b7280' }} width={40} />
+              <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+              <Legend verticalAlign="top" height={30} wrapperStyle={{ fontSize: '12px' }}/>
+              
+              {/* Dùng nét đứt (strokeDasharray) hoặc AreaChart tùy bạn, ở đây giữ nguyên nét đứt để khác biệt */}
+              <Line type="monotone" dataKey="Delay NB (%)" stroke={colors.NB} strokeDasharray="4 4" strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Delay ĐN (%)" stroke={colors.DN} strokeDasharray="4 4" strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Delay TSN (%)" stroke={colors.TSN} strokeDasharray="4 4" strokeWidth={2} dot={false} connectNulls={true} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
       </div>
     </div>
   );
