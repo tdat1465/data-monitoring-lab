@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { ResponsiveContainer, Treemap, Tooltip } from 'recharts';
+import { colorForIndex } from '@/lib/theme/chartPalette';
 
 type MinuteTreemapNode = {
   minute: number;
@@ -27,9 +28,9 @@ type CellProps = {
 };
 
 function getCellFill(intensity: number) {
-  if (intensity >= 0.8) return '#ea580c';
-  if (intensity >= 0.6) return '#f97316';
-  if (intensity >= 0.4) return '#fb923c';
+  if (intensity >= 0.8) return colorForIndex(4);
+  if (intensity >= 0.6) return colorForIndex(5);
+  if (intensity >= 0.4) return colorForIndex(6);
   if (intensity >= 0.2) return '#fdba74';
   if (intensity > 0) return '#fed7aa';
   return '#f3f4f6';

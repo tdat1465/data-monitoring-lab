@@ -2,9 +2,9 @@
 
 import React, { useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-
-const COLORS = ['#10B981', '#F59E0B', '#EF4444', '#6B7280', '#3B82F6'];
-
+import { colorForIndex } from '@/lib/theme/chartPalette';
+// const COLORS = ['#10B981', '#F59E0B', '#EF4444', '#6B7280', '#3B82F6'];
+const COLORS = [colorForIndex(2), colorForIndex(5), colorForIndex(4), colorForIndex(6), colorForIndex(3), colorForIndex(1), colorForIndex(0), '#9ca3af'];
 const STATUS_LABELS: Record<string, string> = {
   on_time: 'Đúng giờ',
   delayed: 'Trễ',

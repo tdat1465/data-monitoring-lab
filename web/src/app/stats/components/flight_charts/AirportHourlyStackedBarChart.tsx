@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { colorForIndex } from '@/lib/theme/chartPalette';
 
 type FlightRow = {
   source_airport?: string | null;
@@ -25,9 +26,9 @@ const AIRPORT_LABELS: Record<string, string> = {
 };
 
 const AIRPORT_COLORS: Record<string, string> = {
-  NB: '#3b82f6',
-  DN: '#f59e0b',
-  TSN: '#10b981',
+  NB: colorForIndex(3),
+  DN: colorForIndex(5),
+  TSN: colorForIndex(2),
 };
 
 export function AirportHourlyStackedBarChart({ data }: { data: FlightRow[] }) {

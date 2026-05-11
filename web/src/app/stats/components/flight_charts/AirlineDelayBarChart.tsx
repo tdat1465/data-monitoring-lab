@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from 'recharts';
+import { colorForIndex } from '@/lib/theme/chartPalette';
 
 export function AirlineDelayBarChart({ data }: { data: Array<{ airline: string; delayRate: number; flights: number }> }) {
   const chartData = useMemo(() => {
@@ -18,7 +19,7 @@ export function AirlineDelayBarChart({ data }: { data: Array<{ airline: string; 
             <XAxis type="number" tick={{ fontSize: 12, fill: '#6b7280' }} />
             <YAxis dataKey="airline" type="category" tick={{ fontSize: 13, fill: '#6b7280' }} width={50} interval={0} />
             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-            <Bar dataKey="delayRate" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={24}>
+            <Bar dataKey="delayRate" fill={colorForIndex(1)} radius={[0, 4, 4, 0]} barSize={24}>
               <LabelList dataKey="delayRate" position="right" fontSize={11} formatter={(val: any) => typeof val === 'number' ? `${val.toFixed(1)}%` : ''} />
             </Bar>
           </BarChart>

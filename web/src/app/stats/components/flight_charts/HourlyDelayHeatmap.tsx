@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import { colorForIndex } from '@/lib/theme/chartPalette';
 
 interface HeatmapDataRow {
   day: string;
@@ -24,9 +25,9 @@ export function HourlyDelayHeatmap({ data }: { data: HeatmapDataRow[] }) {
     if (intensity === 0) return '#f3f4f6'; // light gray
     if (intensity < 0.2) return '#fed7aa'; // light orange
     if (intensity < 0.4) return '#fdba74'; // medium orange
-    if (intensity < 0.6) return '#fb923c'; // orange
-    if (intensity < 0.8) return '#f97316'; // dark orange
-    return '#ea580c'; // darker orange
+    if (intensity < 0.6) return colorForIndex(6); // brown
+    if (intensity < 0.8) return colorForIndex(5); // dark brown
+    return colorForIndex(4); // darker brown
   };
 
   return (
@@ -37,7 +38,7 @@ export function HourlyDelayHeatmap({ data }: { data: HeatmapDataRow[] }) {
         <div className="flex items-center gap-2 text-xs text-gray-600 mb-4 pb-4">
           <span className="font-semibold">Thấp</span>
           <div className="flex gap-1">
-            {['#f3f4f6', '#fed7aa', '#fdba74', '#fb923c', '#f97316', '#ea580c'].map((color, idx) => (
+            {['#f3f4f6', '#fed7aa', '#fdba74', colorForIndex(6), colorForIndex(5), colorForIndex(4)].map((color, idx) => (
               <div
                 key={`legend-${idx}`}
                 className="w-5 h-5 rounded"
