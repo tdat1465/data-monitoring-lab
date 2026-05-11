@@ -51,10 +51,13 @@ export function OverviewTab({
     if (!rawWeatherHistory || rawWeatherHistory.length === 0) return [];
     
     return rawWeatherHistory.filter((row: any) => {
-      if (!appliedDateRange.start || !appliedDateRange.end) return true; 
+      if (!appliedDateRange.start || !appliedDateRange.end) return true;
+
       const reportTime = new Date(row.report_time_vn).getTime();
-      const startTime = new Date(appliedDateRange.start).setHours(0, 0, 0, 0);
-      const endTime = new Date(appliedDateRange.end).setHours(23, 59, 59, 999);
+      // So sánh với ICT boundary: 3/5 00:00 ICT = 2/5 17:00 UTC
+      const startTime = new Date(`${appliedDateRange.start}T00:00:00+07:00`).getTime();
+      const endTime   = new Date(`${appliedDateRange.end}T23:59:59.999+07:00`).getTime();
+
       return reportTime >= startTime && reportTime <= endTime;
     });
   }, [rawWeatherHistory, appliedDateRange]);
@@ -234,7 +237,7 @@ export function OverviewTab({
       {/* GRID BIỂU ĐỒ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="w-full">
-          <CloudCoverChart rawWeatherHistory={filteredData} />
+          <CloudCoverChart rawWeatherHistory={filteredData} filteredFlights={flightsInRange} selectedAirport={selectedAirport}/>
         </div>
         <div className="w-full">
           <TemperatureHeatmap rawWeatherHistory={filteredData} />
@@ -242,7 +245,7 @@ export function OverviewTab({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <AirportRadarChart rawWeatherHistory={filteredData} />
+        <AirportRadarChart rawWeatherHistory={filteredData} selectedAirport={selectedAirport} />
         <VisibilityBoxPlot rawWeatherHistory={filteredData} />
       </div>
     </div>

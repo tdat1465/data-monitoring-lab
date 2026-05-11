@@ -14,7 +14,7 @@ import {
   AreaChart
 } from 'recharts';
 
-export function WeatherTimeSeriesChart({ rawWeatherHistory = [] }: any) {
+export function WeatherTimeSeriesChart({ rawWeatherHistory = [], selectedAirport }: any) {
   
   const chartData = useMemo(() => {
     return rawWeatherHistory.map((row: any) => {
@@ -22,18 +22,25 @@ export function WeatherTimeSeriesChart({ rawWeatherHistory = [] }: any) {
       // Định dạng: HH:mm DD/MM
       const label = `${dateObj.getHours()}:${dateObj.getMinutes().toString().padStart(2, '0')} ${dateObj.getDate()}/${dateObj.getMonth() + 1}`;
       
+      // Lấy delay rate tương ứng theo sân bay được chọn
+      const delayRate = selectedAirport === 'DN' ? row.Delay_DN 
+                      : selectedAirport === 'TSN' ? row.Delay_TSN 
+                      : selectedAirport === 'NB' ? row.Delay_NB
+                      : row.Delay_all;
+      
       return {
         time: label,
         'Nhiệt độ (°C)': row.temperature_c !== null ? Number(row.temperature_c) : null,
         'Điểm sương (°C)': row.dew_point_c !== null ? Number(row.dew_point_c) : null,
+        'Tỉ lệ trễ (%)': delayRate || 0,
         airport: row.icao_code === 'VVNB' ? 'Nội Bài' : row.icao_code === 'VVDN' ? 'Đà Nẵng' : 'Tân Sơn Nhất'
       };
     });
-  }, [rawWeatherHistory]);
+  }, [rawWeatherHistory, selectedAirport]);
 
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
-      <h2 className="mb-6 text-xl font-bold text-gray-800">Diễn biến Nhiệt độ & Điểm sương</h2>
+      <h2 className="mb-6 text-xl font-bold text-gray-800">Diễn biến Nhiệt độ, Điểm sương & Tỉ lệ trễ</h2>
       
       <div className="w-full" style={{ height: '400px' }}>
         <ResponsiveContainer width="100%" height={420}>
@@ -58,9 +65,20 @@ export function WeatherTimeSeriesChart({ rawWeatherHistory = [] }: any) {
               tick={{ fontSize: 12, fill: '#6b7280' }}
             />
             
+            {/* Trục Y trái cho Nhiệt độ & Điểm sương */}
             <YAxis 
+              yAxisId="left"
               tick={{ fontSize: 12, fill: '#6b7280' }}
               domain={['dataMin - 2', 'dataMax + 2']}
+            />
+            
+            {/* Trục Y phải cho Tỉ lệ trễ */}
+            <YAxis 
+              yAxisId="right"
+              orientation="right"
+              domain={[0, 100]}
+              tick={{ fontSize: 12, fill: '#6b7280' }}
+              label={{ value: '%', angle: 90, position: 'insideRight' }}
             />
             
             <Tooltip 
@@ -72,6 +90,7 @@ export function WeatherTimeSeriesChart({ rawWeatherHistory = [] }: any) {
 
             {/* Vùng Area cho Điểm sương - Tạo cảm giác mềm mại */}
             <Area
+              yAxisId="left"
               type="monotone"
               dataKey="Điểm sương (°C)"
               stroke="#10b981"
@@ -81,12 +100,24 @@ export function WeatherTimeSeriesChart({ rawWeatherHistory = [] }: any) {
 
             {/* Đường Line cho Nhiệt độ - Điểm nhấn chính */}
             <Line
+              yAxisId="left"
               type="monotone"
               dataKey="Nhiệt độ (°C)"
               stroke="#ef4444"
               strokeWidth={3}
               dot={false}
               activeDot={{ r: 6, strokeWidth: 0 }}
+            />
+            
+            {/* Đường Line cho Tỉ lệ trễ */}
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey="Tỉ lệ trễ (%)"
+              stroke="#f59e0b"
+              strokeWidth={2}
+              dot={false}
+              strokeDasharray="5 5"
             />
           </ComposedChart>
         </ResponsiveContainer>

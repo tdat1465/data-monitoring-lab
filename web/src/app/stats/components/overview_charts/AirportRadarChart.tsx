@@ -3,13 +3,19 @@
 import { useMemo } from 'react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
-export function AirportRadarChart({ rawWeatherHistory = [] }: any) {
+export function AirportRadarChart({ rawWeatherHistory = [], selectedAirport = null }: any) {
   const radarData = useMemo(() => {
-    const stations = [
+    const allStations = [
       { code: 'VVNB', label: 'Nội Bài' },
       { code: 'VVDN', label: 'Đà Nẵng' },
       { code: 'VVTS', label: 'Tân Sơn Nhất' }
     ];
+    
+    // Filter stations based on selected airport
+    const stationMap: Record<string, string> = { 'NB': 'VVNB', 'DN': 'VVDN', 'TSN': 'VVTS' };
+    const stations = selectedAirport && stationMap[selectedAirport]
+      ? allStations.filter(s => s.code === stationMap[selectedAirport])
+      : allStations;
     
     const metrics = [
       { key: 'temperature_c', label: 'Nhiệt độ (°C)' },
@@ -27,9 +33,14 @@ export function AirportRadarChart({ rawWeatherHistory = [] }: any) {
             if (m.key === 'humidity') {
               const t = Number(d.temperature_c);
               const td = Number(d.dew_point_c);
-              return (t && td) ? 100 - 5 * (t - td) : null;
+              const humidity = (t && td) ? 100 - 5 * (t - td) : null;
+              return humidity ? humidity / 10 : null;
             }
-            return Number(d[m.key]);
+            let val = Number(d[m.key]);
+            if (m.key === 'temperature_c') {
+              return val ? val / 10 : null;
+            }
+            return val;
           })
           .filter((v: any) => v !== null && !isNaN(v));
         
@@ -37,11 +48,14 @@ export function AirportRadarChart({ rawWeatherHistory = [] }: any) {
       });
       return entry;
     });
-  }, [rawWeatherHistory]);
+  }, [rawWeatherHistory, selectedAirport]);
+
+  const stationLabels: Record<string, string> = { 'NB': 'Nội Bài', 'DN': 'Đà Nẵng', 'TSN': 'Tân Sơn Nhất' };
+  const title = selectedAirport ? `Đặc tính Khí hậu - ${stationLabels[selectedAirport]}` : 'Đặc tính Khí hậu 3 Miền';
 
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm h-full">
-      <h2 className="mb-4 text-lg font-bold text-gray-800">Đặc tính Khí hậu 3 Miền</h2>
+      <h2 className="mb-4 text-lg font-bold text-gray-800">{title}</h2>
       <div className="h-[450px]">
         <ResponsiveContainer width="100%" height={450}>
           <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>

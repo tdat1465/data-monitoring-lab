@@ -57,7 +57,7 @@ export function StatsClient({ flights, rawWeatherHistory, serverDateRange }: {
       {/* Render Component tương ứng */}
       <div className="mt-6">
         {activeTab === 'overview' && <OverviewTab flights={flights} rawWeatherHistory={rawWeatherHistory} onDateFilter={handleDateFilter} initialDateRange={serverDateRange}/>}
-        {activeTab === 'weather' && <WeatherTab rawWeatherHistory={rawWeatherHistory} onDateFilter={handleDateFilter} initialDateRange={serverDateRange} />}
+        {activeTab === 'weather' && <WeatherTab rawWeatherHistory={rawWeatherHistory} flights={flights} onDateFilter={handleDateFilter} initialDateRange={serverDateRange} />}
         {activeTab === 'flights' && <FlightTab flights={flights} />}
       </div>
     </div>
