@@ -245,7 +245,7 @@ export function OverviewTab({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <AirportRadarChart rawWeatherHistory={filteredData} />
+        <AirportRadarChart rawWeatherHistory={filteredData} selectedAirport={selectedAirport} />
         <VisibilityBoxPlot rawWeatherHistory={filteredData} />
       </div>
     </div>
