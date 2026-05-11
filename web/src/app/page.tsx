@@ -80,7 +80,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Danh sách các chuyến bay</h1>
           <p className="text-gray-500 mt-1">
             Theo dõi chuyến bay — {displayDate}
           </p>

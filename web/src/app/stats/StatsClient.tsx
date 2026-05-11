@@ -31,7 +31,7 @@ export function StatsClient({ flights, rawWeatherHistory, serverDateRange }: {
     <div className="space-y-6">
       {/* Header & Tabs Navigation */}
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Thống kê</h1>
+        <h1 className="text-3xl font-bold">Dashboard</h1>
         <div className="flex bg-gray-100 p-1 rounded-lg">
           <button 
             onClick={() => setActiveTab('overview')}
