@@ -50,9 +50,9 @@ export function VisibilityBoxPlot({ rawWeatherHistory = [] }: any) {
                   return (
                     <div className="bg-white p-3 border rounded-lg shadow-lg text-sm">
                       <p className="font-bold border-bottom mb-1">{data.name}</p>
-                      <p className="text-[#00308f]">Min: {data.low} miles</p>
-                      <p className="text-[#8f5f00]">Max: {(data.low + data.range).toFixed(1)} miles</p>
-                      <p className="text-[#dc9200] font-bold">Trung bình: {data.avg} miles</p>
+                      <p className="text-[#81b29a]">Min: {data.low} miles</p>
+                      <p className="text-[#e07a5f]">Max: {(data.low + data.range).toFixed(1)} miles</p>
+                      <p className="text-[#f2cc8f] font-bold">Trung bình: {data.avg} miles</p>
                     </div>
                   );
                 }
@@ -60,7 +60,7 @@ export function VisibilityBoxPlot({ rawWeatherHistory = [] }: any) {
               }}
             />
             <Bar dataKey="low" stackId="a" fill="transparent" />
-            <Bar dataKey="range" stackId="a" fill="#00308f" radius={[0, 4, 4, 0]} barSize={24} />
+            <Bar dataKey="range" stackId="a" fill="#3d405b" radius={[0, 4, 4, 0]} barSize={24} />
           </BarChart>
         </ResponsiveContainer>
       </div>

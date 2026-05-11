@@ -32,7 +32,7 @@ export function AirportComparisonChart({ rawWeatherHistory = [] }: any) {
   }, [rawWeatherHistory]);
 
   // Màu sắc thống nhất cho từng sân bay
-  const colors = { NB: '#432c00', DN: '#dc9200', TSN: '#004adc' };
+  const colors = { NB: '#3d405b', DN: '#f2cc8f', TSN: '#e07a5f' };
 
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">

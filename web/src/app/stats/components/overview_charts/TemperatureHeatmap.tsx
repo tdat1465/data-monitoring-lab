@@ -50,10 +50,10 @@ export function TemperatureHeatmap({ rawWeatherHistory = [] }: any) {
 
   const getColor = (temp: number) => {
     if (temp <= 0) return '#f3f4f6';
-    if (temp > 32) return '#dc9200';
-    if (temp > 28) return '#8f5f00';
-    if (temp > 24) return '#004adc';
-    if (temp > 20) return '#00308f';
+    if (temp > 32) return '#e07a5f';
+    if (temp > 28) return '#eab69f';
+    if (temp > 24) return '#81b29a';
+    if (temp > 20) return '#3d405b';
     return '#001643';
   };
 

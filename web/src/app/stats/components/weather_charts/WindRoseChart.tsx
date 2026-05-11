@@ -116,9 +116,9 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
             {/* THÊM LEGEND: Giúp người dùng click vào để ẩn/hiện các lớp biểu đồ */}
             <Legend verticalAlign="top" height={36} wrapperStyle={{ cursor: 'pointer' }} />
             
-            <Radar name="Số bản tin (chia 10)" dataKey="Tần suất" stroke="#004adc" fill="#004adc" fillOpacity={0.3} />
-            <Radar name="Gió mạnh > 15kt" dataKey="Gió mạnh (>15kt)" stroke="#432c00" fill="#432c00" fillOpacity={0.5} />
-            <Radar name="Tỉ lệ trễ (%)" dataKey="Tỉ lệ trễ (%)" stroke="#dc9200" fill="#dc9200" fillOpacity={0.6} />
+            <Radar name="Số bản tin" dataKey="Tần suất" stroke="#81b29a" fill="#81b29a" fillOpacity={0.3} />
+            <Radar name="Gió mạnh > 15kt" dataKey="Gió mạnh (>15kt)" stroke="#f2cc8f" fill="#f2cc8f" fillOpacity={0.5} />
+            <Radar name="Tỉ lệ trễ (%)" dataKey="Tỉ lệ trễ (%)" stroke="#e07a5f" fill="#e07a5f" fillOpacity={0.6} />
             
             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
           </RadarChart>

@@ -45,13 +45,13 @@ export function PressureHumidityChart({ rawWeatherHistory = [], selectedAirport 
             <Legend verticalAlign="top" align="right" />
 
             {/* Vẽ Độ ẩm dạng Cột (Bar) */}
-            <Bar yAxisId="right" dataKey="Độ ẩm (%)" fill="#bae6fd" radius={[4, 4, 0, 0]} barSize={20} />
+            <Bar yAxisId="right" dataKey="Độ ẩm (%)" fill="#caebdb" radius={[4, 4, 0, 0]} barSize={20} />
             
             {/* Vẽ Áp suất dạng Đường (Line) */}
-            <Line yAxisId="left" type="monotone" dataKey="Áp suất (QNH)" stroke="#00308f" strokeWidth={3} dot={false} />
+            <Line yAxisId="left" type="monotone" dataKey="Áp suất (QNH)" stroke="#3d405b" strokeWidth={3} dot={false} />
             
             {/* Vẽ Tỉ lệ trễ dạng Đường (Line) */}
-            <Line yAxisId="right" type="monotone" dataKey="Tỉ lệ trễ (%)" stroke="#dc9200" strokeWidth={2} dot={false}  />
+            <Line yAxisId="right" type="monotone" dataKey="Tỉ lệ trễ (%)" stroke="#e07a5f" strokeWidth={2} dot={false}  />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

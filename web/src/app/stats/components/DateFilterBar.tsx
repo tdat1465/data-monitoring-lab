@@ -76,7 +76,7 @@ export function DateFilterBar({
         {/* APPLY */}
         <button
           onClick={onApply}
-          className="px-4 py-1.5 text-sm font-medium text-white bg-[#004adc] rounded-lg hover:bg-[#00308f] transition-colors shadow-sm"
+          className="px-4 py-1.5 text-sm font-medium text-white bg-[#e07a5f] rounded-lg hover:bg-[#eab69f] transition-colors shadow-sm"
         >
           Lọc
         </button>
@@ -85,7 +85,7 @@ export function DateFilterBar({
         {onToday && (
           <button
             onClick={onToday}
-            className="px-4 py-1.5 text-sm font-medium text-white bg-[#dc9200] rounded-lg hover:bg-[#8f5f00] transition-colors shadow-sm"
+            className="px-4 py-1.5 text-sm font-medium text-white bg-[#f2cc8f] rounded-lg hover:bg-[#ebe5c3] transition-colors shadow-sm"
           >
             Hôm nay
           </button>
@@ -140,7 +140,7 @@ export function DateFilterBar({
                 onClick={() => setResolution(opt.value as any)}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
                   resolution === opt.value
-                    ? 'bg-white shadow-sm text-[#432c00]'
+                    ? 'bg-white shadow-sm text-[#3d405b]'
                     : 'text-gray-500'
                 }`}
               >
