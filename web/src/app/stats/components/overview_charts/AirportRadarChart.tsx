@@ -61,9 +61,9 @@ export function AirportRadarChart({ rawWeatherHistory = [], selectedAirport = nu
           <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
             <PolarGrid stroke="#e5e7eb" />
             <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12, fill: '#4b5563' }} />
-            <Radar name="Nội Bài" dataKey="VVNB" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.5} />
-            <Radar name="Đà Nẵng" dataKey="VVDN" stroke="#10b981" fill="#10b981" fillOpacity={0.5} />
-            <Radar name="Tân Sơn Nhất" dataKey="VVTS" stroke="#ef4444" fill="#ef4444" fillOpacity={0.5} />
+            <Radar name="Nội Bài" dataKey="VVNB" stroke="#432c00" fill="#432c00" fillOpacity={0.5} />
+            <Radar name="Đà Nẵng" dataKey="VVDN" stroke="#DC9200" fill="#DC9200" fillOpacity={0.5} />
+            <Radar name="Tân Sơn Nhất" dataKey="VVTS" stroke="#004adc" fill="#004adc" fillOpacity={0.5} />
             <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
             <Legend verticalAlign="bottom" iconType="circle" />
           </RadarChart>

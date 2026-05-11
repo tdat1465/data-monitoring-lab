@@ -39,9 +39,9 @@ export function VisibilityChart({ rawWeatherHistory = [], selectedAirport }: any
             {/* Cấu hình dải màu Gradient: Xanh (Cao) -> Vàng -> Đỏ (Đáy) */}
             <defs>
               <linearGradient id="visibilityGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity={0.8} />   {/* Xanh Lục - Quang đãng */}
-                <stop offset="60%" stopColor="#fbbf24" stopOpacity={0.8} />  {/* Vàng - Bắt đầu có sương */}
-                <stop offset="100%" stopColor="#ef4444" stopOpacity={0.9} /> {/* Đỏ - Tầm nhìn cực kém */}
+                <stop offset="0%" stopColor="#004adc" stopOpacity={0.8} />   {/* Xanh Lục - Quang đãng */}
+                <stop offset="60%" stopColor="#a5b7dc" stopOpacity={0.8} />  {/* Vàng - Bắt đầu có sương */}
+                <stop offset="100%" stopColor="#8f5f00" stopOpacity={0.9} /> {/* Đỏ - Tầm nhìn cực kém */}
               </linearGradient>
             </defs>
 
@@ -63,10 +63,10 @@ export function VisibilityChart({ rawWeatherHistory = [], selectedAirport }: any
             />
             
             {/* Vẽ vùng Area */}
-            <Area yAxisId="left" type="monotone" dataKey="Tầm nhìn (dặm)" stroke="#059669" strokeWidth={2} fill="url(#visibilityGradient)" connectNulls={true} />
+            <Area yAxisId="left" type="monotone" dataKey="Tầm nhìn (dặm)" stroke="#432c00" strokeWidth={2} fill="url(#visibilityGradient)" connectNulls={true} />
             
             {/* Vẽ đường Line cho tỉ lệ Trễ */}
-            <Line yAxisId="right" type="monotone" dataKey="Tỉ lệ Trễ (%)" stroke="#ef4444" strokeWidth={2} dot={false} connectNulls={true} />
+            <Line yAxisId="right" type="monotone" dataKey="Tỉ lệ Trễ (%)" stroke="#dc9200" strokeWidth={2} dot={false} connectNulls={true} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

@@ -110,11 +110,11 @@ export function CloudCoverChart({ rawWeatherHistory = [],filteredFlights = [], s
 
   // Bộ màu sắc: Quang mây (Xanh) -> Nhiều mây (Xám đậm)
     const COLORS: Record<string, string> = {
-        'Trời quang (CLR/CAVOK)': '#00a7f5', // Xanh da trời đậm rực rỡ (Nắng gắt, trong trẻo)
-        'Ít mây (FEW)': '#64b0d9',     // Xanh lơ nhạt ngả trắng (Vài gợn mây xốp)
-        'Mây rải rác (SCT)': '#aab8d0',// Xám tro trung tính (Mắt đầu âm u, nửa mây nửa nắng)
-        'Nhiều mây (BKN)': '#4b5563',  // Xám chì đậm (Trời xỉn màu, mây kéo đầy)
-        'Mây mù che kín (OVC)': '#111827', // Xám đen thẫm (Trời tối sầm, sương mù dày đặc)
+        'Trời quang (CLR/CAVOK)': '#001643', // Xanh da trời đậm rực rỡ (Nắng gắt, trong trẻo)
+        'Ít mây (FEW)': '#00308f',     // Xanh lơ nhạt ngả trắng (Vài gợn mây xốp)
+        'Mây rải rác (SCT)': '#004adc',// Xám tro trung tính (Mắt đầu âm u, nửa mây nửa nắng)
+        'Nhiều mây (BKN)': '#432c00',  // Xám chì đậm (Trời xỉn màu, mây kéo đầy)
+        'Mây mù che kín (OVC)': '#8f5f00', // Xám đen thẫm (Trời tối sầm, sương mù dày đặc)
         'Không xác định': '#fbbf24'    // Vàng cam nổi bật (Báo hiệu dữ liệu có vấn đề cần check)
     };
 

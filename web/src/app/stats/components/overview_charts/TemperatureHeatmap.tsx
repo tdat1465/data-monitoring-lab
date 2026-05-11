@@ -49,12 +49,12 @@ export function TemperatureHeatmap({ rawWeatherHistory = [] }: any) {
   }, [rawWeatherHistory]);
 
   const getColor = (temp: number) => {
-    if (temp <= 0) return 'bg-gray-100';
-    if (temp > 32) return 'bg-red-500';
-    if (temp > 28) return 'bg-orange-400';
-    if (temp > 24) return 'bg-yellow-400';
-    if (temp > 20) return 'bg-green-400';
-    return 'bg-blue-400';
+    if (temp <= 0) return '#f3f4f6';
+    if (temp > 32) return '#dc9200';
+    if (temp > 28) return '#8f5f00';
+    if (temp > 24) return '#004adc';
+    if (temp > 20) return '#00308f';
+    return '#001643';
   };
 
   return (
@@ -69,8 +69,13 @@ export function TemperatureHeatmap({ rawWeatherHistory = [] }: any) {
         <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-50 rounded-full border border-slate-100">
           <span className="text-[10px] font-semibold text-slate-400 uppercase">Mát</span>
           <div className="flex gap-1">
-            {['bg-sky-400', 'bg-emerald-400', 'bg-amber-400', 'bg-orange-400', 'bg-orange-600'].map(c => (
-              <div key={c} className={`w-2.5 h-2.5 rounded-full ${c}`} />
+            {/* Định nghĩa các mốc nhiệt độ để hiển thị màu tương ứng */}
+            {[15, 22, 26, 30, 35].map(temp => (
+              <div 
+                key={temp} 
+                className="w-2.5 h-2.5 rounded-full" 
+                style={{ backgroundColor: getColor(temp) }} 
+              />
             ))}
           </div>
           <span className="text-[10px] font-semibold text-slate-400 uppercase">Nóng</span>
@@ -90,8 +95,11 @@ export function TemperatureHeatmap({ rawWeatherHistory = [] }: any) {
             <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
               {airport.data.map(d => (
                 <div key={d.date} className="group relative">
-                  <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-sm ${getColor(d.avgTemp)} transition-all duration-300 hover:ring-2 hover:ring-offset-2 hover:ring-slate-300 flex items-center justify-center cursor-default`} >
-                    <span className="text-[9px] font-bold text-black/60">{new Date(d.date).getDate()}</span>
+                  <div 
+                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-sm transition-all duration-300 hover:ring-2 hover:ring-offset-2 hover:ring-slate-300 flex items-center justify-center cursor-default"
+                    style={{ backgroundColor: getColor(d.avgTemp) }}
+                  >
+                    <span className="text-[9px] font-bold text-white/80">{new Date(d.date).getDate()}</span>
                   </div>
                   
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-slate-900 text-white text-[10px] py-1.5 px-2.5 rounded-lg shadow-2xl z-20 whitespace-nowrap">

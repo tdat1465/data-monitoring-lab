@@ -92,7 +92,7 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
     // 4. Tính tỉ lệ phần trăm cuối cùng
     return counts.map(c => ({
       subject: c.subject,
-      'Tần suất': c['Tần suất'],
+      'Tần suất': c['Tần suất'] / 10,
       'Gió mạnh (>15kt)': c['Gió mạnh (>15kt)'],
       'Tỉ lệ trễ (%)': c.totalFlightsInDir > 0 
         ? Number(((c.delayedFlightsCount / c.totalFlightsInDir) * 100).toFixed(1)) 
@@ -116,9 +116,9 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
             {/* THÊM LEGEND: Giúp người dùng click vào để ẩn/hiện các lớp biểu đồ */}
             <Legend verticalAlign="top" height={36} wrapperStyle={{ cursor: 'pointer' }} />
             
-            <Radar name="Tổng số bản tin" dataKey="Tần suất" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
-            <Radar name="Gió mạnh > 15kt" dataKey="Gió mạnh (>15kt)" stroke="#ef4444" fill="#ef4444" fillOpacity={0.5} />
-            <Radar name="Tỉ lệ trễ (%)" dataKey="Tỉ lệ trễ (%)" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.6} />
+            <Radar name="Số bản tin (chia 10)" dataKey="Tần suất" stroke="#004adc" fill="#004adc" fillOpacity={0.3} />
+            <Radar name="Gió mạnh > 15kt" dataKey="Gió mạnh (>15kt)" stroke="#432c00" fill="#432c00" fillOpacity={0.5} />
+            <Radar name="Tỉ lệ trễ (%)" dataKey="Tỉ lệ trễ (%)" stroke="#dc9200" fill="#dc9200" fillOpacity={0.6} />
             
             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
           </RadarChart>

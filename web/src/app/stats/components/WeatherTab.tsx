@@ -222,19 +222,17 @@ export function WeatherTab({
 
   return (
     <div className="space-y-6">
-      <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm space-y-4">
-        <DateFilterBar
-          inputDateRange={inputDateRange}
-          setInputDateRange={setInputDateRange}
-          resolution={resolution}
-          setResolution={setResolution}
-          onApply={handleApplyFilter}
-          onClear={handleClearFilter}
-          onToday={handleToday}
-          selectedAirport={selectedAirport}
-          onAirportChange={setSelectedAirport}
-        />
-      </div>
+      <DateFilterBar
+        inputDateRange={inputDateRange}
+        setInputDateRange={setInputDateRange}
+        resolution={resolution}
+        setResolution={setResolution}
+        onApply={handleApplyFilter}
+        onClear={handleClearFilter}
+        onToday={handleToday}
+        selectedAirport={selectedAirport}
+        onAirportChange={setSelectedAirport}
+      />
       
       {/* HÀNG 1: Biểu đồ đường chuỗi thời gian (Chiếm Full 100% chiều ngang) */}
       <div className="w-full">

@@ -32,7 +32,7 @@ export function AirportComparisonChart({ rawWeatherHistory = [] }: any) {
   }, [rawWeatherHistory]);
 
   // Màu sắc thống nhất cho từng sân bay
-  const colors = { NB: '#3b82f6', DN: '#10b981', TSN: '#fb923c' };
+  const colors = { NB: '#432c00', DN: '#dc9200', TSN: '#004adc' };
 
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
@@ -74,9 +74,9 @@ export function AirportComparisonChart({ rawWeatherHistory = [] }: any) {
               <Legend verticalAlign="top" height={30} wrapperStyle={{ fontSize: '12px' }}/>
               
               {/* Dùng nét đứt (strokeDasharray) hoặc AreaChart tùy bạn, ở đây giữ nguyên nét đứt để khác biệt */}
-              <Line type="monotone" dataKey="Delay NB (%)" stroke={colors.NB} strokeDasharray="4 4" strokeWidth={2} dot={false} connectNulls={true} />
-              <Line type="monotone" dataKey="Delay ĐN (%)" stroke={colors.DN} strokeDasharray="4 4" strokeWidth={2} dot={false} connectNulls={true} />
-              <Line type="monotone" dataKey="Delay TSN (%)" stroke={colors.TSN} strokeDasharray="4 4" strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Delay NB (%)" stroke={colors.NB} strokeDasharray="3 3" strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Delay ĐN (%)" stroke={colors.DN} strokeDasharray="3 3" strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Delay TSN (%)" stroke={colors.TSN} strokeDasharray="3 3" strokeWidth={2} dot={false} connectNulls={true} />
             </LineChart>
           </ResponsiveContainer>
         </div>
