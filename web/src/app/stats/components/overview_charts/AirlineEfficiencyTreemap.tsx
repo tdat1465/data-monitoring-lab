@@ -2,11 +2,13 @@
 
 import React, { useMemo } from 'react';
 import { ResponsiveContainer, Treemap, Tooltip } from 'recharts';
+import { colorForIndex } from '@/lib/theme/chartPalette';
+
 
 function getColor(rate: number) {
-  if (rate >= 0.6) return '#dc2626';
-  if (rate >= 0.3) return '#f59e0b';
-  return '#10b981';
+  if (rate >= 0.6) return colorForIndex(4);
+  if (rate >= 0.3) return colorForIndex(5);
+  return colorForIndex(2);
 }
 
 export function AirlineEfficiencyTreemap({ nodes, byAirport }: { nodes: Array<{ name: string; size: number; delayRate: number }>; byAirport?: Record<string, Record<string, { flights: number; delayed: number }>> }) {

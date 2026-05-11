@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
+import { colorForIndex } from '@/lib/theme/chartPalette';
 
 const AIRPORT_LABELS: Record<string, string> = {
   NB: 'Sân bay Nội Bài',
@@ -32,9 +33,9 @@ export function PredictedRiskLineChart({ seriesByAirport }: { seriesByAirport: R
             <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} label={{ value: 'Phút', angle: -90, position: 'insideLeft', offset: 10 }} />
             <Tooltip />
             <Legend />
-            <Line type="monotone" dataKey="NB" name={AIRPORT_LABELS.NB} stroke="#10B981" dot={false} />
-            <Line type="monotone" dataKey="DN" name={AIRPORT_LABELS.DN} stroke="#F59E0B" dot={false} />
-            <Line type="monotone" dataKey="TSN" name={AIRPORT_LABELS.TSN} stroke="#EF4444" dot={false} />
+            <Line type="monotone" dataKey="NB" name={AIRPORT_LABELS.NB} stroke={colorForIndex(3)} dot={false} />
+            <Line type="monotone" dataKey="DN" name={AIRPORT_LABELS.DN} stroke={colorForIndex(5)} dot={false} />
+            <Line type="monotone" dataKey="TSN" name={AIRPORT_LABELS.TSN} stroke={colorForIndex(2)} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
