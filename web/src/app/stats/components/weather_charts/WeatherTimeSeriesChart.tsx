@@ -52,8 +52,8 @@ export function WeatherTimeSeriesChart({ rawWeatherHistory = [], selectedAirport
                 <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
               </linearGradient>
               <linearGradient id="colorDew" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#004adc" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#004adc" stopOpacity={0}/>
               </linearGradient>
             </defs>
 
@@ -93,7 +93,7 @@ export function WeatherTimeSeriesChart({ rawWeatherHistory = [], selectedAirport
               yAxisId="left"
               type="monotone"
               dataKey="Điểm sương (°C)"
-              stroke="#10b981"
+              stroke="#001643"
               fillOpacity={1}
               fill="url(#colorDew)"
             />
@@ -103,7 +103,7 @@ export function WeatherTimeSeriesChart({ rawWeatherHistory = [], selectedAirport
               yAxisId="left"
               type="monotone"
               dataKey="Nhiệt độ (°C)"
-              stroke="#ef4444"
+              stroke="#8f5f00"
               strokeWidth={3}
               dot={false}
               activeDot={{ r: 6, strokeWidth: 0 }}
@@ -114,7 +114,7 @@ export function WeatherTimeSeriesChart({ rawWeatherHistory = [], selectedAirport
               yAxisId="right"
               type="monotone"
               dataKey="Tỉ lệ trễ (%)"
-              stroke="#f59e0b"
+              stroke="#dc9200"
               strokeWidth={2}
               dot={false}
               strokeDasharray="5 5"
