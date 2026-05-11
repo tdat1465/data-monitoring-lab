@@ -105,14 +105,36 @@ export function OverviewTab({
     return <div className="p-8 text-center text-gray-500">Đang chuẩn bị dữ liệu tổng quan...</div>;
   }
 
-  console.log('overview flights sample', flights[0], flights[1], flights[2]);
   const getDelayFlag = (flight: Flight) => Number(flight.label_delay ?? 0) === 1;
+  const getFlightDate = (scheduledDt: string | Date | null | undefined) => {
+    if (!scheduledDt) return '';
+
+    if (typeof scheduledDt === 'string') {
+      const match = scheduledDt.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (match) return match[1];
+    }
+
+    const date = scheduledDt instanceof Date ? scheduledDt : new Date(scheduledDt);
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+
+    const year = parts.find(part => part.type === 'year')?.value;
+    const month = parts.find(part => part.type === 'month')?.value;
+    const day = parts.find(part => part.type === 'day')?.value;
+    return year && month && day ? `${year}-${month}-${day}` : '';
+  };
   // --- Compute flight + ML + weather KPIs ---
   const flightsInRange = flights.filter(f => {
-    if (!appliedDateRange.start || !appliedDateRange.end) return true;
-    if (!f.scheduled_dt) return false;
-    const d = new Date(f.scheduled_dt).toISOString().slice(0,10);
-    const dateMatch = d >= appliedDateRange.start && d <= appliedDateRange.end;
+    if (!appliedDateRange.start || !appliedDateRange.end) return !selectedAirport || f.source_airport === selectedAirport;
+
+    const flightDate = getFlightDate(f.scheduled_dt);
+    if (!flightDate) return false;
+
+    const dateMatch = flightDate >= appliedDateRange.start && flightDate <= appliedDateRange.end;
     const airportMatch = !selectedAirport || f.source_airport === selectedAirport;
     return dateMatch && airportMatch;
   });
@@ -130,7 +152,17 @@ export function OverviewTab({
   // Use date from applied filter but time from current moment (hour/min/sec)
   const baseDate = appliedDateRange && appliedDateRange.end ? new Date(appliedDateRange.end) : new Date();
   baseDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
-  const twoHoursLater = new Date(baseDate.getTime() + 12 * 60 * 60 * 1000);
+  const twelveHoursLater = new Date(baseDate.getTime() + 12 * 60 * 60 * 1000);
+
+  // Build a flight set specifically for the 12-hour prediction window so
+  // predictions are shown even if they cross day boundaries
+  const flightsFor12hPrediction = flights.filter(f => {
+    if (f.predict_delay_minutes == null) return false;
+    if (!f.scheduled_dt) return false;
+    const t = new Date(f.scheduled_dt).getTime();
+    return t >= baseDate.getTime() && t <= twelveHoursLater.getTime();
+  });
+
   const airports = ['NB','DN','TSN'];
   const getAirlineCode = (flight: Flight) => {
     return flight.airline_code ?? (flight.flight_number ? String(flight.flight_number).match(/^([A-Z0-9]{2})/)?.[0] ?? 'UNK' : 'UNK');
@@ -139,7 +171,7 @@ export function OverviewTab({
   // build 15-min buckets for the next 12 hours (date from filter, time from now)
   const intervalMins = 15;
   const intervals: string[] = [];
-  for (let t = new Date(baseDate.getTime()); t <= twoHoursLater; t = new Date(t.getTime() + intervalMins * 60 * 1000)) {
+  for (let t = new Date(baseDate.getTime()); t <= twelveHoursLater; t = new Date(t.getTime() + intervalMins * 60 * 1000)) {
     intervals.push(new Date(t).toISOString());
   }
 
@@ -152,7 +184,7 @@ export function OverviewTab({
     const start = new Date(iso);
     const end = new Date(start.getTime() + intervalMins * 60 * 1000);
     airports.forEach((ap) => {
-      const items = flightsInRange.filter(f => f.source_airport === ap && f.predict_delay_minutes != null && f.scheduled_dt && new Date(f.scheduled_dt) >= start && new Date(f.scheduled_dt) < end);
+      const items = flightsFor12hPrediction.filter(f => f.source_airport === ap && f.scheduled_dt && new Date(f.scheduled_dt) >= start && new Date(f.scheduled_dt) < end);
       const avg = items.length ? items.reduce((s, x) => s + (Number(x.predict_delay_minutes)||0),0) / items.length : 0;
       seriesByAirport[ap].push({ time: start.toISOString(), avgPredicted: Number(avg.toFixed(2)) });
     });

@@ -32,8 +32,80 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
   const [inputDateRange, setInputDateRange] = useState<DateRange>(getInitialDates);
   const [appliedDateRange, setAppliedDateRange] = useState<DateRange>(getInitialDates);
   const [selectedAirport, setSelectedAirport] = useState<'ALL' | 'NB' | 'DN' | 'TSN'>('ALL');
+  const [resolution, setResolution] = useState<'raw' | '30m' | '1h' | '1d'>('raw');
 
+  // Helper functions matching OverviewTab
+  const getDelayFlag = (flight: any) => Number(flight.label_delay ?? 0) === 1;
+  const getFlightDate = (scheduledDt: string | Date | null | undefined) => {
+    if (!scheduledDt) return '';
 
+    if (typeof scheduledDt === 'string') {
+      const match = scheduledDt.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (match) return match[1];
+    }
+
+    const date = scheduledDt instanceof Date ? scheduledDt : new Date(scheduledDt);
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+
+    const year = parts.find(part => part.type === 'year')?.value;
+    const month = parts.find(part => part.type === 'month')?.value;
+    const day = parts.find(part => part.type === 'day')?.value;
+    return year && month && day ? `${year}-${month}-${day}` : '';
+  };
+
+  // Helper to get hour and day name in Vietnam timezone
+  const getHourAndDayInVN = (scheduledDt: string | Date | null | undefined) => {
+    if (!scheduledDt) return { hour: 0, dayName: 'Sun' };
+
+    const date = scheduledDt instanceof Date ? scheduledDt : new Date(scheduledDt);
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      weekday: 'short',
+      hour: '2-digit',
+      hour12: false,
+    });
+
+    const parts = formatter.formatToParts(date);
+    const dayPart = parts.find(p => p.type === 'weekday')?.value || 'Sun';
+    const dayNames: Record<string, string> = {
+      'Sun': 'Sun', 'Mon': 'Mon', 'Tue': 'Tue', 'Wed': 'Wed',
+      'Thu': 'Thu', 'Fri': 'Fri', 'Sat': 'Sat'
+    };
+    const hourPart = parts.find(p => p.type === 'hour')?.value || '0';
+    
+    return { hour: parseInt(hourPart, 10), dayName: dayNames[dayPart] || 'Sun' };
+  };
+
+  // Event handlers
+  const handleApplyFilter = () => {
+    setAppliedDateRange(inputDateRange);
+  };
+
+  const handleClearFilter = () => {
+    const defaultRange = getInitialDates();
+    setInputDateRange(defaultRange);
+    setAppliedDateRange(defaultRange);
+    setResolution('raw');
+  };
+
+  const handleToday = () => {
+    const today = new Date();
+    const formatDate = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    const todayStr = formatDate(today);
+    const todayRange = { start: todayStr, end: todayStr };
+    setInputDateRange(todayRange);
+    setAppliedDateRange(todayRange);
+  };
 
   // Normalize input records (parse dates, cast numbers, extract airline_code/hour)
   const normalized = useMemo(() => {
@@ -93,23 +165,24 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
 
   const filteredNormalized = useMemo(() => {
     if (!normalized || normalized.length === 0) return [] as any[];
-    return normalized.filter((r) => {
-      if (selectedAirport !== 'ALL' && r.source_airport !== selectedAirport) return false;
-      if (appliedDateRange.start || appliedDateRange.end) {
-        const d = r.scheduled_dt_iso ? r.scheduled_dt_iso.slice(0, 10) : '';
-        if (d === '') return false;
-        if (appliedDateRange.start && d < appliedDateRange.start) return false;
-        if (appliedDateRange.end && d > appliedDateRange.end) return false;
-      }
-      return true;
+    return normalized.filter((f) => {
+      if (!appliedDateRange.start || !appliedDateRange.end) 
+        return selectedAirport === 'ALL' || f.source_airport === selectedAirport;
+
+      const flightDate = getFlightDate(f.scheduled_dt);
+      if (!flightDate) return false;
+
+      const dateMatch = flightDate >= appliedDateRange.start && flightDate <= appliedDateRange.end;
+      const airportMatch = selectedAirport === 'ALL' || f.source_airport === selectedAirport;
+      return dateMatch && airportMatch;
     });
   }, [normalized, selectedAirport, appliedDateRange]);
 
   const processedData = useMemo(() => {
     const total = filteredNormalized.length;
-    const delayedCount = filteredNormalized.filter((r) => (r.label_delay ?? 0) === 1).length;
+    const delayedCount = filteredNormalized.filter(getDelayFlag).length;
     const delayRate = total ? (delayedCount / total) * 100 : 0;
-    const delayRecords = filteredNormalized.filter((r) => typeof r.delay_minutes === 'number' && r.delay_minutes != null) as any[];
+    const delayRecords = filteredNormalized.filter((r) => (r.delay_minutes ?? 0) != null) as any[];
     const avgDelay = delayRecords.length > 0 ? delayRecords.reduce((s, r) => s + r.delay_minutes, 0) / delayRecords.length : 0;
     
     // Debug: Check data quality
@@ -133,7 +206,7 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
       const a = r.airline_code ?? 'UNK';
       airlineAgg[a] = airlineAgg[a] || { flights: 0, delayed: 0 };
       airlineAgg[a].flights += 1;
-      if ((r.label_delay ?? 0) === 1) airlineAgg[a].delayed += 1;
+      if (getDelayFlag(r)) airlineAgg[a].delayed += 1;
     });
     const airlinePerf = Object.entries(airlineAgg)
       .map(([k, v]) => ({ airline: k, delayRate: (v.delayed / v.flights) * 100, flights: v.flights }))
@@ -143,20 +216,13 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
     const hourlyByDay: Record<string, Record<number, number>> = {
       'Mon': {}, 'Tue': {}, 'Wed': {}, 'Thu': {}, 'Fri': {}, 'Sat': {}, 'Sun': {}
     };
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     filteredNormalized.forEach((r) => {
-      let h = 0;
-      let dayName = 'Sun';
-      if (typeof r.scheduled_hour === 'number') h = r.scheduled_hour;
-      if (r.scheduled_dt_iso) {
-        const dt = new Date(r.scheduled_dt_iso);
-        if (!isNaN(dt.getTime())) {
-          h = dt.getHours();
-          dayName = dayNames[dt.getUTCDay()];
-        }
-      }
-      if ((r.label_delay ?? 0) === 1) {
+      if (!r.scheduled_dt) return;
+      
+      const { hour: h, dayName } = getHourAndDayInVN(r.scheduled_dt);
+      
+      if (getDelayFlag(r)) {
         hourly[h] = (hourly[h] || 0) + 1;
         hourlyByDay[dayName][h] = (hourlyByDay[dayName][h] || 0) + 1;
       }
@@ -184,7 +250,7 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
       const route = r.route_airport_std || 'UNK';
       routeAgg[route] = routeAgg[route] || { flights: 0, delayed: 0 };
       routeAgg[route].flights += 1;
-      if ((r.label_delay ?? 0) === 1) routeAgg[route].delayed += 1;
+      if (getDelayFlag(r)) routeAgg[route].delayed += 1;
     });
     const routePerf = Object.entries(routeAgg)
       .map(([route, v]) => ({ route, delayRate: (v.delayed / v.flights) * 100, flights: v.flights }))
@@ -208,6 +274,7 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
     <div className="space-y-6">
       <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm space-y-4">
         <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm transition-all duration-300 hover:shadow-md hover:border-gray-300 space-y-4">
+          {/* ROW 1: Date inputs + buttons */}
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-600">Từ ngày:</label>
@@ -230,19 +297,22 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
             </div>
 
             <button
-              onClick={() => setAppliedDateRange(inputDateRange)}
+              onClick={handleApplyFilter}
               className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
               Lọc
             </button>
 
+            <button
+              onClick={handleToday}
+              className="px-4 py-1.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+            >
+              Hôm nay
+            </button>
+
             {(inputDateRange.start || inputDateRange.end) && (
               <button
-                onClick={() => {
-                  const defaultRange = getInitialDates();
-                  setInputDateRange(defaultRange);
-                  setAppliedDateRange(defaultRange);
-                }}
+                onClick={handleClearFilter}
                 className="text-sm text-red-600 hover:underline ml-auto"
               >
                 Xóa lọc
@@ -250,19 +320,45 @@ export function FlightTab({ rawFlightData = [], flights }: { rawFlightData?: Fli
             )}
           </div>
 
+          {/* ROW 2: Airport + Resolution */}
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-600">Sân bay:</label>
               <select
                 value={selectedAirport}
                 onChange={(e) => setSelectedAirport(e.target.value as any)}
-                className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="ALL">Tất cả sân bay</option>
-                <option value="NB">Nội Bài</option>
-                <option value="DN">Đà Nẵng</option>
-                <option value="TSN">Tân Sơn Nhất</option>
+                <option value="NB">Nội Bài (NB)</option>
+                <option value="DN">Đà Nẵng (DN)</option>
+                <option value="TSN">Tân Sơn Nhất (TSN)</option>
               </select>
+            </div>
+
+            <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-600">Hiển thị:</span>
+              <div className="flex bg-gray-100 p-1 rounded-lg">
+                {[
+                  { label: 'Gốc', value: 'raw' },
+                  { label: '1 Giờ', value: '1h' },
+                  { label: '1 Ngày', value: '1d' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setResolution(opt.value as any)}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                      resolution === opt.value
+                        ? 'bg-white shadow-sm text-blue-600'
+                        : 'text-gray-500'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
