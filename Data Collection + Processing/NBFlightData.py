@@ -1,89 +1,188 @@
-import requests
+from curl_cffi import requests
 import pandas as pd
-from bs4 import BeautifulSoup
+import time
 
 from db_utils import save_dataframe
 
-def get_noibai_all_flights(date, terminal="T1"):
-    """
-    Lấy dữ liệu cả chiều đi và đến tại sân bay Nội Bài.
-    """
-    # Lấy thời gian thu thập theo giờ Việt Nam
-    scrape_time = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d %H:%M:%S")
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
-    }
 
-    # Định nghĩa 2 chiều bay cần lấy
-    flight_directions = [
-        {"endpoint": "arrivals", "label": "Arrival"},
-        {"endpoint": "departures", "label": "Departure"}
-    ]
+REQUEST_TIMEOUT = 30
+MAX_PAGES = 5
+
+VN_AIRPORTS = {
+    "HAN": "Hà Nội",
+    "SGN": "Hồ Chí Minh",
+    "DAD": "Đà Nẵng",
+    "PQC": "Phú Quốc",
+    "CXR": "Nha Trang",
+    "VDO": "Vân Đồn",
+    "HPH": "Hải Phòng",
+    "VII": "Vinh",
+    "HUI": "Huế",
+    "VDH": "Đồng Hới",
+    "VCL": "Chu Lai",
+    "UIH": "Quy Nhơn",
+    "TBB": "Tuy Hòa",
+    "BMV": "Buôn Ma Thuột",
+    "PXU": "Pleiku",
+    "DLI": "Đà Lạt",
+    "VCS": "Côn Đảo",
+    "VKG": "Rạch Giá",
+    "CAH": "Cà Mau",
+    "VCA": "Cần Thơ",
+    "THD": "Thanh Hóa",
+    "DIN": "Điện Biên",
+}
+
+FR24_HEADERS = {
+    "accept": "application/json, text/plain, */*",
+    "accept-language": "vi;q=0.9,en-US;q=0.8,en;q=0.7",
+    "origin": "https://www.flightradar24.com",
+    "referer": "https://www.flightradar24.com/",
+    "sec-ch-ua": '"Chromium";v="148", "Brave";v="148", "Not/A)Brand";v="99"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-site",
+    "sec-gpc": "1",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+}
+
+
+def _ts_to_hhmm(ts: int | None) -> str | None:
+    if not ts:
+        return None
+    return pd.to_datetime(ts, unit='s', utc=True).tz_convert('Asia/Ho_Chi_Minh').strftime('%H:%M')
+
+
+def _ts_to_yyyy_mm_dd(ts: int | None) -> str | None:
+    if not ts:
+        return None
+    return pd.to_datetime(ts, unit='s', utc=True).tz_convert('Asia/Ho_Chi_Minh').strftime('%Y-%m-%d')
+
+
+def _fetch_fr24_flights(session: requests.Session, airport_code: str, flight_type: str, timestamp: int, max_pages: int = MAX_PAGES) -> list[dict]:
+    rows = []
+    
+    for page in range(1, max_pages + 1):
+        url = (
+            f"https://api.flightradar24.com/common/v1/airport.json"
+            f"?code={airport_code}&plugin[]=&plugin-setting[schedule][mode]={flight_type}"
+            f"&plugin-setting[schedule][timestamp]={timestamp}&page={page}&limit=100&fleet=&token="
+        )
+        try:
+            response = session.get(url, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as exc:
+            print(f"Loi khi goi API FlightRadar24 ({flight_type}, page={page}): {exc}")
+            break
+            
+        schedule = data.get("result", {}).get("response", {}).get("airport", {}).get("pluginData", {}).get("schedule", {})
+        flight_data = schedule.get(flight_type, {})
+        items = flight_data.get("data", [])
+        
+        if not items:
+            break
+            
+        rows.extend(items)
+        
+        page_info = flight_data.get("page", {})
+        current_page = page_info.get("current", 1)
+        total_pages = page_info.get("total", 1)
+        if current_page >= total_pages:
+            break
+            
+    return rows
+
+
+def get_fr24_flights(airport_code="han", flight_type="arrival", max_pages=MAX_PAGES, flight_date: str | None = None):
+    timestamp = int(time.time())
+    
+    session = requests.Session(impersonate="chrome")
+    session.headers.update(FR24_HEADERS)
+    
+    fr24_mode = "arrivals" if flight_type == "arrival" else "departures"
+    flight_direction = "Arrival" if flight_type == "arrival" else "Departure"
+    
+    print(f"\n[DANG LAY DU LIEU {flight_direction.upper()} TU FLIGHTRADAR24 - {airport_code.upper()}]")
+    
+    raw_data = _fetch_fr24_flights(session, airport_code, fr24_mode, timestamp, max_pages)
     
     all_flights = []
-
-    for direction in flight_directions:
-        endpoint = direction["endpoint"]
-        label = direction["label"]
-        
-        url = f"https://noibaiairport.vn/vi/{endpoint}?key=&date={date}&time=0000-2359&ter={terminal}"
-        print(f"Đang tải dữ liệu Nội Bài: Chiều {label} ({date} - {terminal})...")
-        
-        try:
-            response = requests.get(url, headers=headers)
-            if response.status_code != 200:
-                print(f"Lỗi truy cập {url}: {response.status_code}")
-                continue
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-            table = soup.find('table', class_='table table-responsive mt-30 table-hover')
+    seen = set()
+    
+    for item in raw_data:
+        flight = item.get("flight", {})
+        if not flight:
+            continue
             
-            if not table:
-                print(f"Không tìm thấy bảng dữ liệu cho chiều {label}!")
-                continue
-
-            tbody = table.find('tbody')
-            rows = tbody.find_all('tr')
+        ident = flight.get("identification", {})
+        flight_number = ident.get("number", {}).get("default")
+        if not flight_number:
+            continue
             
-            for row in rows:
-                cols = row.find_all('td')
-                if len(cols) == 6:
-                    # 1. Làm sạch và tách cột thời gian (Ví dụ: "05:00 / 05:00")
-                    time_col = " ".join(cols[0].text.split())
-                    parts = [p.strip() for p in time_col.split('/')]
-                    scheduled_time = parts[0] if len(parts) > 0 and parts[0] else None
-                    estimated_time = parts[1] if len(parts) > 1 and parts[1] else None
+        status_obj = flight.get("status", {})
+        status = status_obj.get("text")
+        
+        time_data = flight.get("time", {})
+        sched = time_data.get("scheduled", {})
+        real = time_data.get("real", {})
+        est = time_data.get("estimated", {})
+        
+        if flight_type == "departure":
+            scheduled_ts = sched.get("departure")
+            real_ts = real.get("departure")
+            est_ts = est.get("departure")
+            airport_obj = flight.get("airport", {}).get("destination", {})
+        else:
+            scheduled_ts = sched.get("arrival")
+            real_ts = real.get("arrival")
+            est_ts = est.get("arrival")
+            airport_obj = flight.get("airport", {}).get("origin", {})
+            
+        country_code = airport_obj.get("position", {}).get("country", {}).get("code") if airport_obj else None
+        if country_code != "VN":
+            continue
+            
+        scheduled_time = _ts_to_hhmm(scheduled_ts)
+        estimated_time = _ts_to_hhmm(real_ts) or _ts_to_hhmm(est_ts)
+        flight_date_str = _ts_to_yyyy_mm_dd(scheduled_ts)
+        
+        airport_name = airport_obj.get("name") if airport_obj else None
+        airport_iata = airport_obj.get("code", {}).get("iata") if airport_obj else None
+        
+        if airport_iata in VN_AIRPORTS:
+            airport = VN_AIRPORTS[airport_iata]
+        elif airport_iata and airport_name:
+            airport = f"{airport_iata} - {airport_name}"
+        else:
+            airport = airport_name or airport_iata
+            
+        row = {
+            "Flight Date": flight_date_str,
+            "Direction": flight_direction,
+            "Scheduled Time": scheduled_time,
+            "Estimated Time": estimated_time,
+            "Airport": airport,
+            "Flight Number": flight_number,
+            "Status": status,
+        }
+        
+        dedupe_key = (
+            row["Flight Date"],
+            row["Direction"],
+            row["Scheduled Time"],
+            row["Airport"],
+            row["Flight Number"],
+            row["Status"],
+        )
+        
+        if dedupe_key not in seen:
+            seen.add(dedupe_key)
+            all_flights.append(row)
 
-                    # 2. Ghi dữ liệu vào mảng theo format chung
-                    all_flights.append({
-                        "Data Retrieved At (VN)": scrape_time,
-                        "Flight Date": date,
-                        "Direction": label,
-                        "Scheduled Time": scheduled_time,
-                        "Estimated Time": estimated_time,
-                        "Airport": cols[1].text.strip(),
-                        "Flight Number": cols[3].text.strip(),
-                        "Status": cols[5].text.strip()
-                    })
-
-        except Exception as e:
-            print(f"Có lỗi xảy ra khi xử lý chiều {label}: {e}")
-
-    # Chuyển đổi mảng tổng thành DataFrame theo đúng thứ tự cột chung
-    df_final = pd.DataFrame(all_flights)
-    expected_columns = [
-        "Data Retrieved At (VN)",
-        "Flight Date",
-        "Direction",
-        "Scheduled Time",
-        "Estimated Time",
-        "Airport",
-        "Flight Number",
-        "Status",
-    ]
-    df_final = df_final.reindex(columns=expected_columns)
-    return df_final
+    return pd.DataFrame(all_flights)
 
 
 def _to_db_schema(df: pd.DataFrame) -> pd.DataFrame:
@@ -103,20 +202,25 @@ def _to_db_schema(df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     target_date = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d")
-    target_terminal = "T1"
 
-    df_noibai = get_noibai_all_flights(date=target_date, terminal=target_terminal)
-    if df_noibai.empty:
-        print("NB: Không thu thập được dữ liệu chuyến bay.")
+    df_arrivals = get_fr24_flights(airport_code="han", flight_type="arrival", max_pages=20, flight_date=target_date)
+    df_departures = get_fr24_flights(airport_code="han", flight_type="departure", max_pages=20, flight_date=target_date)
+
+    df_all = pd.concat([df_arrivals, df_departures], ignore_index=True)
+    if df_all.empty:
+        print("NB: Khong thu thap duoc du lieu chuyen bay.")
         return
 
-    db_df = _to_db_schema(df_noibai)
+    collected_at_vn = pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%Y-%m-%d %H:%M:%S")
+    df_all.insert(0, "Data Retrieved At (VN)", collected_at_vn)
+
+    db_df = _to_db_schema(df_all)
     inserted = save_dataframe(
         db_df,
         table_name="flights_nb",
         unique_cols=["flight_date", "direction", "scheduled_time", "airport", "flight_number", "status"],
     )
-    print(f"NB: Đã ghi {inserted}/{len(db_df)} dòng vào PostgreSQL.")
+    print(f"NB: Da ghi {inserted}/{len(db_df)} dong vao PostgreSQL.")
 
 
 if __name__ == "__main__":
