@@ -23,13 +23,13 @@ export function PredictedRiskLineChart({ seriesByAirport }: { seriesByAirport: R
 
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
-      <h2 className="mb-4 text-xl font-bold text-gray-800">Rủi ro dự báo (2 giờ tới)</h2>
+      <h2 className="mb-4 text-xl font-bold text-gray-800">Rủi ro dự báo (12 giờ tới)</h2>
       <div className="w-full h-80">
         <ResponsiveContainer width="100%" height={320}>
-          <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <LineChart data={data} margin={{ top: 10, right: 30, left: 60, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="time" tick={{ fontSize: 12, fill: '#6b7280' }} />
-            <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} />
+            <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} label={{ value: 'Phút', angle: -90, position: 'insideLeft', offset: 10 }} />
             <Tooltip />
             <Legend />
             <Line type="monotone" dataKey="NB" name={AIRPORT_LABELS.NB} stroke="#10B981" dot={false} />

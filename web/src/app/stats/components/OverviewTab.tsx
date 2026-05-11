@@ -102,7 +102,7 @@ export function OverviewTab({
     return <div className="p-8 text-center text-gray-500">Đang chuẩn bị dữ liệu tổng quan...</div>;
   }
 
-  console.log('overview flights sample', flights[30], flights[31], flights[32]);
+  console.log('overview flights sample', flights[0], flights[1], flights[2]);
   const getDelayFlag = (flight: Flight) => Number(flight.label_delay ?? 0) === 1;
   // --- Compute flight + ML + weather KPIs ---
   const flightsInRange = flights.filter(f => {
@@ -122,18 +122,18 @@ export function OverviewTab({
   const avgVisibility = filteredData.length ? (filteredData.reduce((s:any,r:any)=> s + (Number(r.visibility_miles)||0),0) / filteredData.length) : null;
   const avgWind = filteredData.length ? (filteredData.reduce((s:any,r:any)=> s + (Number(r.wind_speed_kt)||0),0) / filteredData.length) : null;
 
-  // ML predictions for next 2 hours
+  // ML predictions for next 12 hours
   const now = new Date();
   // Use date from applied filter but time from current moment (hour/min/sec)
   const baseDate = appliedDateRange && appliedDateRange.end ? new Date(appliedDateRange.end) : new Date();
   baseDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
-  const twoHoursLater = new Date(baseDate.getTime() + 2 * 60 * 60 * 1000);
+  const twoHoursLater = new Date(baseDate.getTime() + 12 * 60 * 60 * 1000);
   const airports = ['NB','DN','TSN'];
   const getAirlineCode = (flight: Flight) => {
     return flight.airline_code ?? (flight.flight_number ? String(flight.flight_number).match(/^([A-Z0-9]{2})/)?.[0] ?? 'UNK' : 'UNK');
   };
 
-  // build 15-min buckets for the next 2 hours (date from filter, time from now)
+  // build 15-min buckets for the next 12 hours (date from filter, time from now)
   const intervalMins = 15;
   const intervals: string[] = [];
   for (let t = new Date(baseDate.getTime()); t <= twoHoursLater; t = new Date(t.getTime() + intervalMins * 60 * 1000)) {

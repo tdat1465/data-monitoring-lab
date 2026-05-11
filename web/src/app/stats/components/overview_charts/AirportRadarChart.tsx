@@ -12,10 +12,10 @@ export function AirportRadarChart({ rawWeatherHistory = [] }: any) {
     ];
     
     const metrics = [
-      { key: 'temperature_c', label: 'Nhiệt độ' },
-      { key: 'humidity', label: 'Độ ẩm' },
-      { key: 'wind_speed_kt', label: 'Gió' },
-      { key: 'visibility_miles', label: 'Tầm nhìn' }
+      { key: 'temperature_c', label: 'Nhiệt độ (°C)' },
+      { key: 'humidity', label: 'Độ ẩm (%)' },
+      { key: 'wind_speed_kt', label: 'Gió (kt)' },
+      { key: 'visibility_miles', label: 'Tầm nhìn (miles)' }
     ];
 
     return metrics.map(m => {

@@ -15,7 +15,7 @@ export function OverviewKPICards({ totalFlights, delayRate, mlAvg, avgVisibility
       </div>
 
       <div className="p-4 rounded-xl shadow-sm bg-white border border-gray-200">
-        <div className="text-sm text-gray-500">Dự báo (2h tới)</div>
+        <div className="text-sm text-gray-500">Dự báo (12h tới)</div>
         <div className="text-2xl font-bold">{Number(mlAvg.toFixed(1))} phút</div>
         <div className="text-sm text-gray-600">Rủi ro trung bình</div>
       </div>
