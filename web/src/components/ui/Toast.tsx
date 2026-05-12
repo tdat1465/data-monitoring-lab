@@ -1,5 +1,6 @@
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react';
-import type { ToastType } from './ToastProvider';
+
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
 interface ToastProps {
   message: string;
@@ -52,5 +53,3 @@ export function Toast({ message, type, onClose }: ToastProps) {
     </div>
   );
 }
-
-export type { ToastType };

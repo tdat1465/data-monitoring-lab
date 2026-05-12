@@ -131,7 +131,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <section>
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <Plane className="w-5 h-5 text-blue-500" />
-          Danh sách chuyến bay ngày {displayDate.split(',')[0]}
+          Danh sách chuyến bay {displayDate}
         </h2>
         <Suspense fallback={<div className="text-gray-400">Đang tải dữ liệu...</div>}>
           <FlightTable initialFlights={flights} />

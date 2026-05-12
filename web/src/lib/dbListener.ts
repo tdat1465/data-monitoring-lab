@@ -121,7 +121,7 @@ export class DbListener {
 
     // Start heartbeat interval
     this.heartbeatInterval = setInterval(() => {
-      if (this.connection && !this.connection.ending) {
+      if (this.connection) {
         // Send a simple query to keep connection alive
         this.connection.query('SELECT 1').catch(() => {
           // Ignore errors, connection might be dead
