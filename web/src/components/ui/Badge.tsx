@@ -51,9 +51,7 @@ export function DelayBadge({ minutes }: { minutes: number | null | undefined }) 
         ? `Sớm ${Math.abs(Math.round(minutes))}p`
         : minutes === 0
           ? 'Đúng giờ'
-          : minutes < 15
-            ? `+${Math.round(minutes)}p`
-            : `Trễ ${Math.round(minutes)}p`;
+          : `Trễ ${Math.round(minutes)}p`;
 
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${delayBadgeClass(minutes)}`}>
