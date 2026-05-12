@@ -14,12 +14,15 @@ import { RoutePerformanceTable } from './flight_charts/RoutePerformanceTable';
 
 type DateRange = { start: string; end: string };
 
-export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDateRange }: { 
-  rawFlightData?: Flight[]; 
-  flights?: Flight[];
-  onDateFilter?: (range: DateRange) => void; 
-  initialDateRange?: DateRange;}) {
-  const dataSource = flights ?? rawFlightData;
+export function FlightTab({ 
+  flights, 
+  onDateFilter,
+  initialDateRange,
+ }: { 
+  flights: Flight[], 
+  onDateFilter: any, 
+  initialDateRange : any 
+}) {
 
   const getInitialDates = () => {
     const today = new Date();
@@ -35,13 +38,21 @@ export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDa
   };
 
   const defaultDates = initialDateRange || getInitialDates();
-  const [inputDateRange, setInputDateRange] = useState<DateRange>(getInitialDates);
-  const [appliedDateRange, setAppliedDateRange] = useState<DateRange>(getInitialDates);
-  const [selectedAirport, setSelectedAirport] = useState<'ALL' | 'NB' | 'DN' | 'TSN'>('ALL');
+  const [inputDateRange, setInputDateRange] = useState(defaultDates);
+  const [appliedDateRange, setAppliedDateRange] = useState(defaultDates);
   const [resolution, setResolution] = useState<'raw' | '30m' | '1h' | '1d'>('raw');
+  const [selectedAirport, setSelectedAirport] = useState<string | null>(null);
 
   // Helper functions matching OverviewTab
-  const getDelayFlag = (flight: any) => Number(flight.label_delay ?? 0) === 1;
+  const getDelayFlag = (flight: any) => {
+    const delayMinutes = Number(flight.delay_minutes);
+    if (!isNaN(delayMinutes) && delayMinutes > 15) return true;
+    
+    const predictDelayMinutes = Number(flight.predict_delay_minutes);
+    if (!isNaN(predictDelayMinutes) && predictDelayMinutes > 15) return true;
+    
+    return false;
+  };
   const getFlightDate = (scheduledDt: string | Date | null | undefined) => {
     if (!scheduledDt) return '';
 
@@ -66,9 +77,10 @@ export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDa
 
   // Helper to get hour and day name in Vietnam timezone
   const getHourAndDayInVN = (scheduledDt: string | Date | null | undefined) => {
-    if (!scheduledDt) return { hour: 0, dayName: 'Sun' };
+    if (!scheduledDt) return { hour: 0, dayName: 'Chủ nhật' };
 
     const date = scheduledDt instanceof Date ? scheduledDt : new Date(scheduledDt);
+    date.setUTCHours(date.getUTCHours() + 7); // Convert to VN time by adding 7 hours
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Ho_Chi_Minh',
       weekday: 'short',
@@ -78,13 +90,18 @@ export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDa
 
     const parts = formatter.formatToParts(date);
     const dayPart = parts.find(p => p.type === 'weekday')?.value || 'Sun';
+    // Map English short weekday to Vietnamese
     const dayNames: Record<string, string> = {
-      'Sun': 'Sun', 'Mon': 'Mon', 'Tue': 'Tue', 'Wed': 'Wed',
-      'Thu': 'Thu', 'Fri': 'Fri', 'Sat': 'Sat'
+      'Sun': 'Chủ nhật',
+      'Mon': 'Thứ 2',
+      'Tue': 'Thứ 3',
+      'Wed': 'Thứ 4',
+      'Thu': 'Thứ 5',
+      'Fri': 'Thứ 6',
+      'Sat': 'Thứ 7',
     };
     const hourPart = parts.find(p => p.type === 'hour')?.value || '0';
-    
-    return { hour: parseInt(hourPart, 10), dayName: dayNames[dayPart] || 'Sun' };
+    return { hour: parseInt(hourPart, 10), dayName: dayNames[dayPart] || 'Chủ nhật' };
   };
 
   // Event handlers
@@ -117,12 +134,15 @@ export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDa
     const todayRange = { start: todayStr, end: todayStr };
     setInputDateRange(todayRange);
     setAppliedDateRange(todayRange);
+    if (onDateFilter) {
+      onDateFilter(todayRange);
+    }
   };
 
   // Normalize input records (parse dates, cast numbers, extract airline_code/hour)
   const normalized = useMemo(() => {
-    if (!dataSource || dataSource.length === 0) return [] as any[];
-    return dataSource.map((r: any) => {
+    if (!flights || flights.length === 0) return [] as any[];
+    return flights.map((r: any) => {
       // scheduled_dt: try to coerce to ISO date string
       let scheduledDtIso = '';
       let scheduledHour: number | null = null;
@@ -131,23 +151,39 @@ export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDa
           const dt = new Date(r.scheduled_dt);
           if (!isNaN(dt.getTime())) {
             scheduledDtIso = dt.toISOString();
-            scheduledHour = dt.getHours();
+            try {
+              const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }).formatToParts(dt);
+              const hourPart = parts.find(p => p.type === 'hour')?.value || '0';
+              scheduledHour = Number(hourPart);
+            } catch (e) {
+              scheduledHour = dt.getHours();
+            }
           } else {
-            // maybe it's date-only like YYYY-MM-DD
+            // maybe it's date-only like YYYY-MM-DD — interpret as VN-local midnight
             const s = r.scheduled_dt.trim();
             if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-              scheduledDtIso = s + 'T00:00:00.000Z';
+              scheduledDtIso = s + 'T00:00:00+07:00';
               scheduledHour = 0;
             }
           }
         } else if (r.scheduled_dt instanceof Date) {
           scheduledDtIso = r.scheduled_dt.toISOString();
-          scheduledHour = r.scheduled_dt.getHours();
+          try {
+            const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }).formatToParts(r.scheduled_dt);
+            scheduledHour = Number(parts.find(p => p.type === 'hour')?.value || '0');
+          } catch (e) {
+            scheduledHour = r.scheduled_dt.getHours();
+          }
         } else if (typeof r.scheduled_dt === 'number') {
           const dt = new Date(r.scheduled_dt);
           if (!isNaN(dt.getTime())) {
             scheduledDtIso = dt.toISOString();
-            scheduledHour = dt.getHours();
+            try {
+              const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }).formatToParts(dt);
+              scheduledHour = Number(parts.find(p => p.type === 'hour')?.value || '0');
+            } catch (e) {
+              scheduledHour = dt.getHours();
+            }
           }
         }
       } catch (e) {
@@ -173,22 +209,15 @@ export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDa
         visibility_miles,
       };
     });
-  }, [dataSource]);
+  }, [flights]);
 
   const filteredNormalized = useMemo(() => {
     if (!normalized || normalized.length === 0) return [] as any[];
     return normalized.filter((f) => {
-      if (!appliedDateRange.start || !appliedDateRange.end) 
-        return selectedAirport === 'ALL' || f.source_airport === selectedAirport;
-
-      const flightDate = getFlightDate(f.scheduled_dt);
-      if (!flightDate) return false;
-
-      const dateMatch = flightDate >= appliedDateRange.start && flightDate <= appliedDateRange.end;
-      const airportMatch = selectedAirport === 'ALL' || f.source_airport === selectedAirport;
-      return dateMatch && airportMatch;
+      if (!selectedAirport || selectedAirport === 'ALL') return true;
+      return f.source_airport === selectedAirport;
     });
-  }, [normalized, selectedAirport, appliedDateRange]);
+  }, [normalized, selectedAirport]);
 
   const processedData = useMemo(() => {
     const total = filteredNormalized.length;
@@ -226,7 +255,7 @@ export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDa
 
     const hourly: Record<number, number> = {};
     const hourlyByDay: Record<string, Record<number, number>> = {
-      'Mon': {}, 'Tue': {}, 'Wed': {}, 'Thu': {}, 'Fri': {}, 'Sat': {}, 'Sun': {}
+      'Thứ 2': {}, 'Thứ 3': {}, 'Thứ 4': {}, 'Thứ 5': {}, 'Thứ 6': {}, 'Thứ 7': {}, 'Chủ nhật': {}
     };
 
     filteredNormalized.forEach((r) => {
@@ -250,9 +279,10 @@ export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDa
     const minuteDelayCounts: Record<string, number> = {};
     filteredNormalized.forEach((r) => {
       const m = Number(r.delay_minutes);
-      if (isNaN(m)) return;
-      const minute = Math.round(m);
-      if (minute <= 0) return;
+      const p = Number(r.predict_delay_minutes);
+      if (isNaN(m) && isNaN(p)) return;
+      const minute = Math.round(m || p);
+      if (minute <= 15) return;
       const key = String(minute);
       minuteDelayCounts[key] = (minuteDelayCounts[key] || 0) + 1;
     });
@@ -306,7 +336,7 @@ export function FlightTab({ rawFlightData = [], flights, onDateFilter, initialDa
             <div className="text-2xl font-bold">{processedData.total}</div>
           </div>
           <div className="p-4 bg-white rounded shadow">
-            <div className="text-sm text-gray-500">Tỷ lệ trễ</div>
+            <div className="text-sm text-gray-500">Tỷ lệ trễ (bao gồm dự báo)</div>
             <div className="text-2xl font-bold">{processedData.delayRate.toFixed(1)}%</div>
           </div>
           <div className="p-4 bg-white rounded shadow">

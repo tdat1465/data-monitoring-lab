@@ -11,9 +11,21 @@ export function getAirportName(code: string): string {
   return AIRPORT_NAME[code] ?? code;
 }
 
-export async function getFlightsWithPredictions(date?: string): Promise<Flight[]> {
-  const targetDate = date ?? new Date().toISOString().split('T')[0];
+function getTodayInVietnam() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(new Date());
+}
 
+function toVietnamDate(date: string) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(new Date(`${date}T00:00:00+07:00`));
+}
+
+export async function getFlightsWithPredictions(date?: string): Promise<Flight[]> {
+  const targetDate = date ? toVietnamDate(date) : getTodayInVietnam();
+  console.log('[getFlightsWithPredictions] input date:', date, 'targetDate:', targetDate);
   const sql = `
     SELECT
       s.flight_key,
@@ -39,6 +51,7 @@ export async function getFlightsWithPredictions(date?: string): Promise<Flight[]
   `;
 
   const result = await query(sql, [targetDate]);
+  console.log('[getFlightsWithPredictions] row count:', result.rows.length);
   return result.rows as unknown as Flight[];
 }
 
@@ -72,6 +85,11 @@ export async function getAllFlights(): Promise<Flight[]> {
 }
 
 export async function getFlightsByDateRange(startDate: string, endDate: string): Promise<Flight[]> {
+  const targetStartDate = toVietnamDate(startDate);
+  const targetEndDate = toVietnamDate(endDate);
+  console.log('[getFlightsByDateRange] input range:', { startDate, endDate });
+  console.log('[getFlightsByDateRange] normalized range:', { targetStartDate, targetEndDate });
+
   const sql = `
     SELECT
       s.flight_key,
@@ -97,7 +115,8 @@ export async function getFlightsByDateRange(startDate: string, endDate: string):
     ORDER BY s.flight_date DESC, s.source_airport, s.scheduled_dt ASC
   `;
 
-  const result = await query(sql, [startDate, endDate]);
+  const result = await query(sql, [targetStartDate, targetEndDate]);
+  console.log('[getFlightsByDateRange] row count:', result.rows.length);
   return result.rows as unknown as Flight[];
 }
 

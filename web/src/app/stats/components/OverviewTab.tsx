@@ -40,7 +40,7 @@ export function OverviewTab({
     };
     return { start: formatDate(sevenDaysAgo), end: formatDate(today) };
   };
-
+  console.log('OverviewTab flights:', flights[0], flights[1], flights[2]);
   const defaultDates = initialDateRange || getInitialDates();
   const [inputDateRange, setInputDateRange] = useState(defaultDates);
   const [appliedDateRange, setAppliedDateRange] = useState(defaultDates);
@@ -128,16 +128,19 @@ export function OverviewTab({
     return year && month && day ? `${year}-${month}-${day}` : '';
   };
   // --- Compute flight + ML + weather KPIs ---
-  const flightsInRange = flights.filter(f => {
-    if (!appliedDateRange.start || !appliedDateRange.end) return !selectedAirport || f.source_airport === selectedAirport;
-
-    const flightDate = getFlightDate(f.scheduled_dt);
-    if (!flightDate) return false;
-
-    const dateMatch = flightDate >= appliedDateRange.start && flightDate <= appliedDateRange.end;
-    const airportMatch = !selectedAirport || f.source_airport === selectedAirport;
-    return dateMatch && airportMatch;
+  const flightsInRange = flights.filter((f) => {
+    return !selectedAirport || f.source_airport === selectedAirport;
   });
+  // const flightsInRange = flights.filter(f => {
+  //   if (!appliedDateRange.start || !appliedDateRange.end) return !selectedAirport || f.source_airport === selectedAirport;
+
+  //   const flightDate = getFlightDate(f.scheduled_dt);
+  //   if (!flightDate) return false;
+
+  //   const dateMatch = flightDate >= appliedDateRange.start && flightDate <= appliedDateRange.end;
+  //   const airportMatch = !selectedAirport || f.source_airport === selectedAirport;
+  //   return dateMatch && airportMatch;
+  // });
 
   const totalFlights = flightsInRange.length;
   const delayedCount = flightsInRange.filter(getDelayFlag).length;
@@ -217,12 +220,30 @@ export function OverviewTab({
   });
 
   // Radar clock: counts of delayed flights per hour
-  const radarHours = Array.from({ length: 24 }, (_,i)=> ({ hour: i, count: 0 }));
+  const getHourInVN = (scheduledDt: string | Date | null | undefined) => {
+    if (!scheduledDt) return null;
+  
+    const date = scheduledDt instanceof Date ? scheduledDt : new Date(scheduledDt);
+    if (isNaN(date.getTime())) return null;
+  
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: '2-digit',
+      hour12: false,
+    }).formatToParts(date);
+  
+    const hour = parts.find(part => part.type === 'hour')?.value;
+    return hour ? Number(hour) : null;
+  };
+  
+  const radarHours = Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0 }));
   flightsInRange.forEach((f) => {
-    if (getDelayFlag(f) && f.scheduled_dt) {
-      const h = new Date(f.scheduled_dt).getHours();
-      radarHours[h].count += 1;
-    }
+    if (!getDelayFlag(f)) return;
+  
+    const hour = getHourInVN(f.scheduled_dt);
+    if (hour === null || Number.isNaN(hour)) return;
+  
+    radarHours[hour].count += 1;
   });
 
   // ML average risk across all airports and intervals
@@ -267,7 +288,7 @@ export function OverviewTab({
       {/* GRID BIỂU ĐỒ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="w-full">
-          <CloudCoverChart rawWeatherHistory={filteredData} filteredFlights={flightsInRange} selectedAirport={selectedAirport}/>
+          <CloudCoverChart rawWeatherHistory={filteredData} filteredFlights={flights} selectedAirport={selectedAirport}/>
         </div>
         <div className="w-full">
           <TemperatureHeatmap rawWeatherHistory={filteredData} />

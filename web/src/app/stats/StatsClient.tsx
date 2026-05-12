@@ -58,7 +58,7 @@ export function StatsClient({ flights, rawWeatherHistory, serverDateRange }: {
       <div className="mt-6">
         {activeTab === 'overview' && <OverviewTab flights={flights} rawWeatherHistory={rawWeatherHistory} onDateFilter={handleDateFilter} initialDateRange={serverDateRange}/>}
         {activeTab === 'weather' && <WeatherTab rawWeatherHistory={rawWeatherHistory} flights={flights} onDateFilter={handleDateFilter} initialDateRange={serverDateRange} />}
-        {activeTab === 'flights' && <FlightTab flights={flights} />}
+        {activeTab === 'flights' && <FlightTab flights={flights} onDateFilter={handleDateFilter} initialDateRange={serverDateRange} />}
       </div>
     </div>
   );
