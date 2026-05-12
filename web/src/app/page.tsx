@@ -5,38 +5,12 @@ import { getLatestWeather } from '@/lib/queries/getWeather';
 import { FlightTable } from '@/components/flights/FlightTable';
 import { DateFilter } from '@/components/flights/DateFilter';
 import { WeatherGrid } from '@/components/weather/WeatherGrid';
-import { Card, CardContent } from '@/components/ui/Card';
+import { StatsWrapper } from '@/app/StatsWrapper';
 
 export const revalidate = 300;
 
 interface DashboardPageProps {
   searchParams: Promise<{ date?: string }>;
-}
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  color,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-4 py-4">
-        <div className={`p-3 rounded-xl ${color}`}>
-          <Icon className="w-6 h-6 text-white" />
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">{label}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -56,17 +30,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }
 
   const total = flights.length;
-  const delayed = flights.filter(
-    (f) => (f.predict_delay_minutes ?? 0) >= 15
-  ).length;
-  const onTime = flights.filter(
-    (f) => f.predict_delay_minutes != null && (f.predict_delay_minutes ?? 0) < 15
-  ).length;
   const noPrediction = flights.filter(
     (f) => f.predict_delay_minutes == null
   ).length;
-  const delayRate =
-    total > 0 ? ((delayed / (total - noPrediction || 1)) * 100).toFixed(1) : '0';
 
   const displayDate = new Date(selectedDate + 'T00:00:00').toLocaleDateString('vi-VN', {
     weekday: 'long',
@@ -91,32 +57,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          label="Tổng chuyến bay"
-          value={total}
-          icon={Plane}
-          color="bg-blue-500"
-        />
-        <StatCard
-          label="Trễ (≥15p)"
-          value={delayed}
-          icon={Plane}
-          color="bg-red-500"
-        />
-        <StatCard
-          label="Đúng giờ"
-          value={onTime}
-          icon={Plane}
-          color="bg-green-500"
-        />
-        <StatCard
-          label="Tỷ lệ trễ"
-          value={`${delayRate}%`}
-          icon={Plane}
-          color="bg-orange-500"
-        />
-      </div>
+      <StatsWrapper flights={flights} />
 
       {/* Weather */}
       <section>

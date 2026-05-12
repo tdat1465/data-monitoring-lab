@@ -4,6 +4,7 @@ import './globals.css';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { ChartThemeProvider } from '@/lib/theme/ChartThemeContext';
 import { DatabaseHealthChecker } from '@/components/DatabaseHealthChecker';
 
 const inter = Inter({ subsets: ['latin', 'vietnamese'] });
@@ -18,16 +19,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi" className="h-full">
       <body className={`${inter.className} h-full flex flex-col antialiased bg-gray-50`}>
-        <ToastProvider>
-          <DatabaseHealthChecker />
-          <Navbar />
-          <main className="flex-1">
-            <div className="max-w-8xl mx-auto px-1 sm:px-2 lg:px-4 py-8">
-              {children}
-            </div>
-          </main>
-          <Footer />
-        </ToastProvider>
+        <ChartThemeProvider>
+          <ToastProvider>
+            <DatabaseHealthChecker />
+            <Navbar />
+            <main className="flex-1">
+              <div className="max-w-8xl mx-auto px-1 sm:px-2 lg:px-4 py-8">
+                {children}
+              </div>
+            </main>
+            <Footer />
+          </ToastProvider>
+        </ChartThemeProvider>
       </body>
     </html>
   );
