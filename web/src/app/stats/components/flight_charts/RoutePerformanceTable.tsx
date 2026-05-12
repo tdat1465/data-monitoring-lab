@@ -14,7 +14,7 @@ export function RoutePerformanceTable({ data }: { data: Array<{ route: string; d
             <tr className="text-left">
               <th className="px-4 py-3 font-semibold text-gray-700">Tuyến bay</th>
               <th className="px-4 py-3 font-semibold text-gray-700 text-right">Tỷ lệ trễ</th>
-              <th className="px-4 py-3 font-semibold text-gray-700 text-right">Chuyến bay</th>
+              <th className="px-4 py-3 font-semibold text-gray-700 text-right">Tổng số chuyến bay của hãng</th>
             </tr>
           </thead>
           <tbody>

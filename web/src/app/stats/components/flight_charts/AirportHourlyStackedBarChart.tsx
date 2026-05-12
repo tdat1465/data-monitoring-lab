@@ -16,6 +16,7 @@ import { colorForIndex } from '@/lib/theme/chartPalette';
 type FlightRow = {
   source_airport?: string | null;
   scheduled_dt_iso?: string;
+  scheduled_dt?: string | Date | null;
   scheduled_hour?: number | null;
 };
 
@@ -32,6 +33,39 @@ const AIRPORT_COLORS: Record<string, string> = {
 };
 
 export function AirportHourlyStackedBarChart({ data }: { data: FlightRow[] }) {
+  const extractHourFromString = (value: string) => {
+    const raw = value.trim();
+    const match = raw.match(/^(?:\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(?::\d{2})?/);
+    if (!match) return null;
+    const hour = Number(match[1]);
+    return Number.isNaN(hour) ? null : hour;
+  };
+
+  const getVietnamHour = (scheduledDt: string | Date | null | undefined) => {
+    if (!scheduledDt) return null;
+
+    // Prefer wall-clock hour from datetime text; source DB stores local datetime as text.
+    if (typeof scheduledDt === 'string') {
+      const hourFromText = extractHourFromString(scheduledDt);
+      if (hourFromText !== null) return hourFromText;
+    }
+
+    const date = scheduledDt instanceof Date ? scheduledDt : new Date(scheduledDt);
+    if (Number.isNaN(date.getTime())) return null;
+
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: '2-digit',
+      hour12: false,
+    }).formatToParts(date);
+
+    const hourPart = parts.find((part) => part.type === 'hour')?.value;
+    if (!hourPart) return null;
+
+    const hour = Number(hourPart);
+    return Number.isNaN(hour) ? null : hour;
+  };
+
   const chartData = useMemo(() => {
     const rows = Array.from({ length: 24 }, (_, hour) => ({
       hour: String(hour).padStart(2, '0'),
@@ -44,12 +78,23 @@ export function AirportHourlyStackedBarChart({ data }: { data: FlightRow[] }) {
       const airport = row.source_airport;
       if (airport !== 'NB' && airport !== 'DN' && airport !== 'TSN') return;
 
-      let hour = row.scheduled_hour ?? null;
-      if (hour === null && row.scheduled_dt_iso) {
-        const dt = new Date(row.scheduled_dt_iso);
-        if (!Number.isNaN(dt.getTime())) {
-          hour = dt.getHours();
+      let hour = row.scheduled_dt && typeof row.scheduled_dt === 'string'
+        ? extractHourFromString(row.scheduled_dt)
+        : null;
+
+      if (hour === null) {
+        const serverHour = Number(row.scheduled_hour);
+        if (!Number.isNaN(serverHour) && serverHour >= 0 && serverHour <= 23) {
+          hour = serverHour;
         }
+      }
+
+      if (hour === null && row.scheduled_dt_iso) {
+        hour = getVietnamHour(row.scheduled_dt_iso);
+      }
+
+      if (hour === null && row.scheduled_dt) {
+        hour = getVietnamHour(row.scheduled_dt);
       }
 
       if (hour === null || hour < 0 || hour > 23) return;

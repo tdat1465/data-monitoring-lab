@@ -40,7 +40,7 @@ export function OverviewTab({
     };
     return { start: formatDate(sevenDaysAgo), end: formatDate(today) };
   };
-  console.log('OverviewTab flights:', flights[0], flights[1], flights[2]);
+  console.log('OverviewTab flights:', flights[10], flights[11], flights[5], flights[6]);
   const defaultDates = initialDateRange || getInitialDates();
   const [inputDateRange, setInputDateRange] = useState(defaultDates);
   const [appliedDateRange, setAppliedDateRange] = useState(defaultDates);
@@ -104,8 +104,10 @@ export function OverviewTab({
   if (!rawWeatherHistory || rawWeatherHistory.length === 0) {
     return <div className="p-8 text-center text-gray-500">Đang chuẩn bị dữ liệu tổng quan...</div>;
   }
+  // thêm trường hợp delay_minutes >= 15 để khớp với logic của FlightTab
+  const getDelayFlag = (flight: Flight) => Number(flight.label_delay ?? 0) === 1 || 
+                                          Number(flight.delay_minutes ?? 0) >= 15;
 
-  const getDelayFlag = (flight: Flight) => Number(flight.label_delay ?? 0) === 1;
   const getFlightDate = (scheduledDt: string | Date | null | undefined) => {
     if (!scheduledDt) return '';
 

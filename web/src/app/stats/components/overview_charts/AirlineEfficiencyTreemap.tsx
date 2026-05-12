@@ -24,6 +24,14 @@ const mixTwoColors = (fromHex: string, toHex: string, t: number) => {
   return `rgb(${mixChannel(fromR, toR, t)}, ${mixChannel(fromG, toG, t)}, ${mixChannel(fromB, toB, t)})`;
 };
 
+const mapAirportCodeToName = (code: string) => {
+  const mapping: Record<string, string> = {
+    'NB': 'sân bay Nội Bài',
+    'DN': 'sân bay Đà Nẵng',
+    'TSN': 'sân bay Tân Sơn Nhất',
+  };
+  return mapping[code] || code;
+}
 
 function getColor(rate: number) {
   if (rate >= 0.5) return mixTwoColors(lowColor, highColor, 0.9);
@@ -104,7 +112,7 @@ export function AirlineEfficiencyTreemap({ nodes, byAirport }: { nodes: Array<{ 
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
       <h2 className="mb-2 text-xl font-bold text-gray-800">Hiệu suất hãng bay</h2>
       {riskSummary && (
-        <div className="mb-4 text-sm text-gray-700">{`Rủi ro cao tại ${riskSummary.airport} (${(riskSummary.rate*100).toFixed(1)}%) — hãng ${riskSummary.topAirline} ${(riskSummary.topRate!=null?`(${(riskSummary.topRate*100).toFixed(1)}%)`:'')}`}</div>
+        <div className="mb-4 text-sm text-gray-700">{`Rủi ro cao tại ${mapAirportCodeToName(riskSummary.airport)} (${(riskSummary.rate*100).toFixed(1)}%) — hãng ${riskSummary.topAirline} ${(riskSummary.topRate!=null?`(${(riskSummary.topRate*100).toFixed(1)}%)`:'')}`}</div>
       )}
       <div className="w-full h-80">
         <ResponsiveContainer width="100%" height={320}>

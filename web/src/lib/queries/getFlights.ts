@@ -33,8 +33,9 @@ export async function getFlightsWithPredictions(date?: string): Promise<Flight[]
       s.source_airport,
       s.direction,
       s.route_airport_std,
-      s.scheduled_dt::timestamptz AT TIME ZONE '+07:00' AS scheduled_dt,
-      s.estimated_dt::timestamptz AT TIME ZONE '+07:00' AS estimated_dt,
+      s.scheduled_dt,
+      substring(s.scheduled_dt from 12 for 2)::int AS scheduled_hour,
+      s.estimated_dt,
       s.status_raw,
       s.status_group,
       s.temperature_c,
@@ -87,8 +88,6 @@ export async function getAllFlights(): Promise<Flight[]> {
 export async function getFlightsByDateRange(startDate: string, endDate: string): Promise<Flight[]> {
   const targetStartDate = toVietnamDate(startDate);
   const targetEndDate = toVietnamDate(endDate);
-  console.log('[getFlightsByDateRange] input range:', { startDate, endDate });
-  console.log('[getFlightsByDateRange] normalized range:', { targetStartDate, targetEndDate });
 
   const sql = `
     SELECT
@@ -97,8 +96,9 @@ export async function getFlightsByDateRange(startDate: string, endDate: string):
       s.source_airport,
       s.direction,
       s.route_airport_std,
-      s.scheduled_dt::timestamptz AT TIME ZONE '+07:00' AS scheduled_dt,
-      s.estimated_dt::timestamptz AT TIME ZONE '+07:00' AS estimated_dt,
+      s.scheduled_dt,
+      substring(s.scheduled_dt from 12 for 2)::int AS scheduled_hour,
+      s.estimated_dt,
       s.status_raw,
       s.status_group,
       s.temperature_c,
@@ -112,11 +112,10 @@ export async function getFlightsByDateRange(startDate: string, endDate: string):
     LEFT JOIN flights_predictions p ON s.flight_key = p.flight_key
     WHERE s.flight_date >= $1
       AND s.flight_date <= $2
-    ORDER BY s.flight_date DESC, s.source_airport, s.scheduled_dt ASC
+    ORDER BY s.scheduled_dt ASC, s.flight_date DESC, s.source_airport
   `;
 
   const result = await query(sql, [targetStartDate, targetEndDate]);
-  console.log('[getFlightsByDateRange] row count:', result.rows.length);
   return result.rows as unknown as Flight[];
 }
 
@@ -128,8 +127,9 @@ export async function getFlightsByHistory(days: number = 7): Promise<Flight[]> {
       s.source_airport,
       s.direction,
       s.route_airport_std,
-      s.scheduled_dt::timestamptz AT TIME ZONE '+07:00' AS scheduled_dt,
-      s.estimated_dt::timestamptz AT TIME ZONE '+07:00' AS estimated_dt,
+      s.scheduled_dt,
+      substring(s.scheduled_dt from 12 for 2)::int AS scheduled_hour,
+      s.estimated_dt,
       s.status_raw,
       s.status_group,
       s.temperature_c,
