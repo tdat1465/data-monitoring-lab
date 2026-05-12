@@ -20,8 +20,68 @@ interface FlightTableProps {
   initialFlights: Flight[];
 }
 
+// Grouped flight with both arrival and departure info
+export interface GroupedFlight {
+  flight_key: string;
+  flight_number: string;
+  source_airport: string;
+
+  // Departure info (chiều đi)
+  departure_route: string;
+  departure_time: string;
+  departure_status: string;
+  departure_delay: number | null;
+
+  // Arrival info (chiều đến)
+  arrival_route: string;
+  arrival_time: string;
+  arrival_status: string;
+  arrival_delay: number | null;
+}
+
+// Helper to group flights by flight_number + source_airport
+function groupFlightsByFlightNumber(flights: Flight[]): GroupedFlight[] {
+  const map = new Map<string, GroupedFlight>();
+
+  for (const f of flights) {
+    const key = `${f.flight_number}-${f.source_airport}`;
+
+    if (!map.has(key)) {
+      map.set(key, {
+        flight_key: f.flight_key,
+        flight_number: f.flight_number,
+        source_airport: f.source_airport,
+        departure_route: '',
+        departure_time: '',
+        departure_status: 'unknown',
+        departure_delay: null,
+        arrival_route: '',
+        arrival_time: '',
+        arrival_status: 'unknown',
+        arrival_delay: null,
+      });
+    }
+
+    const grouped = map.get(key)!;
+
+    if (f.direction === 'Departure') {
+      grouped.departure_route = formatFlightRoute(f.source_airport, f.route_airport_std, f.direction);
+      grouped.departure_time = formatTime(f.scheduled_dt);
+      grouped.departure_status = f.status_group;
+      grouped.departure_delay = f.predict_delay_minutes;
+    } else {
+      grouped.arrival_route = formatFlightRoute(f.source_airport, f.route_airport_std, f.direction);
+      grouped.arrival_time = formatTime(f.scheduled_dt);
+      grouped.arrival_status = f.status_group;
+      grouped.arrival_delay = f.predict_delay_minutes;
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 export function FlightTable({ initialFlights }: FlightTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'scheduled_dt', desc: false }]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'flight_number', desc: false }]);
   const [filters, setFilters] = useState({
     source: '',
     direction: '',
@@ -29,7 +89,13 @@ export function FlightTable({ initialFlights }: FlightTableProps) {
     search: '',
   });
 
-  const columns = useMemo<ColumnDef<Flight>[]>(
+  // Group flights
+  const groupedFlights = useMemo(
+    () => groupFlightsByFlightNumber(initialFlights),
+    [initialFlights]
+  );
+
+  const columns = useMemo<ColumnDef<GroupedFlight>[]>(
     () => [
       {
         accessorKey: 'flight_number',
@@ -48,88 +114,127 @@ export function FlightTable({ initialFlights }: FlightTableProps) {
           </span>
         ),
       },
+      // Departure columns
       {
-        accessorKey: 'route',
+        accessorKey: 'departure_route',
         header: ({ column }) => (
           <button
             className="flex items-center gap-1 hover:text-blue-600"
             onClick={() => column.toggleSorting()}
           >
-            Tuyến bay
-            <ArrowUpDown className="w-3 h-3" />
-          </button>
-        ),
-        cell: ({ row }) => {
-          const f = row.original;
-          const route = formatFlightRoute(f.source_airport, f.route_airport_std, f.direction);
-          return (
-            <span className="font-medium text-gray-800">{route}</span>
-          );
-        },
-        sortingFn: (rowA, rowB) => {
-          const a = formatFlightRoute(
-            rowA.original.source_airport,
-            rowA.original.route_airport_std,
-            rowA.original.direction
-          );
-          const b = formatFlightRoute(
-            rowB.original.source_airport,
-            rowB.original.route_airport_std,
-            rowB.original.direction
-          );
-          return a.localeCompare(b);
-        },
-      },
-      {
-        accessorKey: 'scheduled_dt',
-        header: ({ column }) => (
-          <button
-            className="flex items-center gap-1 hover:text-blue-600"
-            onClick={() => column.toggleSorting()}
-          >
-            Giờ khởi hành
-            <ArrowUpDown className="w-3 h-3" />
-          </button>
-        ),
-        cell: ({ row }) => formatTime(row.original.scheduled_dt),
-      },
-      {
-        accessorKey: 'status_group',
-        header: 'Trạng thái',
-        cell: ({ row }) => <StatusBadge status={row.original.status_group} />,
-      },
-      {
-        accessorKey: 'predict_delay_minutes',
-        header: ({ column }) => (
-          <button
-            className="flex items-center gap-1 hover:text-blue-600"
-            onClick={() => column.toggleSorting()}
-          >
-            Dự báo
+            Tuyến đi
             <ArrowUpDown className="w-3 h-3" />
           </button>
         ),
         cell: ({ row }) => (
-          <DelayBadge minutes={row.original.predict_delay_minutes} />
+          <span className="font-medium text-gray-800">
+            {row.original.departure_route || '—'}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'departure_time',
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-1 hover:text-blue-600"
+            onClick={() => column.toggleSorting()}
+          >
+            Giờ đi
+            <ArrowUpDown className="w-3 h-3" />
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium">{row.original.departure_time || '—'}</span>
+        ),
+      },
+      {
+        accessorKey: 'departure_delay',
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-1 hover:text-blue-600"
+            onClick={() => column.toggleSorting()}
+          >
+            Dự báo đi
+            <ArrowUpDown className="w-3 h-3" />
+          </button>
+        ),
+        cell: ({ row }) => (
+          <DelayBadge minutes={row.original.departure_delay} />
+        ),
+      },
+      // Arrival columns
+      {
+        accessorKey: 'arrival_route',
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-1 hover:text-blue-600"
+            onClick={() => column.toggleSorting()}
+          >
+            Tuyến đến
+            <ArrowUpDown className="w-3 h-3" />
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium text-gray-800">
+            {row.original.arrival_route || '—'}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'arrival_time',
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-1 hover:text-blue-600"
+            onClick={() => column.toggleSorting()}
+          >
+            Giờ đến
+            <ArrowUpDown className="w-3 h-3" />
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium">{row.original.arrival_time || '—'}</span>
+        ),
+      },
+      {
+        accessorKey: 'arrival_delay',
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-1 hover:text-blue-600"
+            onClick={() => column.toggleSorting()}
+          >
+            Dự báo đến
+            <ArrowUpDown className="w-3 h-3" />
+          </button>
+        ),
+        cell: ({ row }) => (
+          <DelayBadge minutes={row.original.arrival_delay} />
         ),
       },
     ],
     []
   );
 
+  // Filter: apply only source/search for grouped flights
   const filtered = useMemo(() => {
-    return initialFlights.filter((f) => {
+    return groupedFlights.filter((f) => {
       if (filters.source && f.source_airport !== filters.source) return false;
-      if (filters.direction && f.direction !== filters.direction) return false;
-      if (filters.status && f.status_group !== filters.status) return false;
       if (
         filters.search &&
         !f.flight_number.toLowerCase().includes(filters.search.toLowerCase())
       )
         return false;
+
+      // Filter by status: check both departure and arrival
+      if (filters.status) {
+        const matchStatus =
+          f.departure_status === filters.status ||
+          f.arrival_status === filters.status;
+        if (!matchStatus) return false;
+      }
+
       return true;
     });
-  }, [initialFlights, filters]);
+  }, [groupedFlights, filters]);
 
   const table = useReactTable({
     data: filtered,
@@ -162,15 +267,6 @@ export function FlightTable({ initialFlights }: FlightTableProps) {
           <option value="NB">Nội Bài</option>
           <option value="DN">Đà Nẵng</option>
           <option value="TSN">Tân Sơn Nhất</option>
-        </select>
-        <select
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-          onChange={(e) => setFilters((f) => ({ ...f, direction: e.target.value }))}
-          value={filters.direction}
-        >
-          <option value="">Chiều</option>
-          <option value="Arrival">Đến</option>
-          <option value="Departure">Đi</option>
         </select>
         <select
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
