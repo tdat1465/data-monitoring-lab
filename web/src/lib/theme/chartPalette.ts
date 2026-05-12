@@ -1,6 +1,6 @@
 export const DEFAULT_PALETTE = [
   '#F4F1DE', '#EAB69F', '#E07A5F', '#3D405B', '#81B29A', '#F2CC8F',
-  '#F59E0B', '#6366F1', '#14B8A6', '#374151'
+  '#F59E0B', '#dc6e50', '#e75f39', '#f1cfc0'
 ];
 
 export function colorForIndex(i:number){ return DEFAULT_PALETTE[i % DEFAULT_PALETTE.length]; }

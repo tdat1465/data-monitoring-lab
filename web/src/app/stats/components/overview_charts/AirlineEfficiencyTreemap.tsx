@@ -4,11 +4,31 @@ import React, { useMemo } from 'react';
 import { ResponsiveContainer, Treemap, Tooltip } from 'recharts';
 import { colorForIndex } from '@/lib/theme/chartPalette';
 
+const lowColor = colorForIndex(4);
+const highColor = colorForIndex(2);
+
+const mixChannel = (from: number, to: number, t: number) => Math.round(from + (to - from) * t);
+
+const mixTwoColors = (fromHex: string, toHex: string, t: number) => {
+  const from = fromHex.replace('#', '');
+  const to = toHex.replace('#', '');
+
+  const fromR = parseInt(from.slice(0, 2), 16);
+  const fromG = parseInt(from.slice(2, 4), 16);
+  const fromB = parseInt(from.slice(4, 6), 16);
+
+  const toR = parseInt(to.slice(0, 2), 16);
+  const toG = parseInt(to.slice(2, 4), 16);
+  const toB = parseInt(to.slice(4, 6), 16);
+
+  return `rgb(${mixChannel(fromR, toR, t)}, ${mixChannel(fromG, toG, t)}, ${mixChannel(fromB, toB, t)})`;
+};
+
 
 function getColor(rate: number) {
-  if (rate >= 0.6) return colorForIndex(4);
-  if (rate >= 0.3) return colorForIndex(5);
-  return colorForIndex(2);
+  if (rate >= 0.5) return mixTwoColors(lowColor, highColor, 0.9);
+  if (rate >= 0.2) return mixTwoColors(lowColor, highColor, 0.5);
+  return mixTwoColors(lowColor, highColor, 0.1);
 }
 
 export function AirlineEfficiencyTreemap({ nodes, byAirport }: { nodes: Array<{ name: string; size: number; delayRate: number }>; byAirport?: Record<string, Record<string, { flights: number; delayed: number }>> }) {
@@ -39,8 +59,8 @@ export function AirlineEfficiencyTreemap({ nodes, byAirport }: { nodes: Array<{ 
           <rect x={x} y={y} width={width} height={height} fill={fill} stroke="#fff" />
           {width > 60 && height > 30 && (
             <>
-              <text x={x + 6} y={y + 16} fill="#fff" fontSize={11} fontWeight={700}>{airport && airline ? airport : name}</text>
-              <text x={x + 6} y={y + 31} fill="#fff" fontSize={11} fontWeight={600}>{airport && airline ? airline : ''}</text>
+              <text x={x + 6} y={y + 16} fill="#fff" fontSize={12} fontWeight={700}>{airport && airline ? airport : name}</text>
+              <text x={x + 6} y={y + 31} fill="#f8fafc" fontSize={11} fontWeight={500}>{airport && airline ? airline : ''}</text>
             </>
           )}
         </g>
@@ -88,10 +108,21 @@ export function AirlineEfficiencyTreemap({ nodes, byAirport }: { nodes: Array<{ 
       )}
       <div className="w-full h-80">
         <ResponsiveContainer width="100%" height={320}>
-          <Treemap data={nested ?? data} dataKey="size" stroke="#fff" content={<CustomizedContent />} isAnimationActive={false} />
+          <Treemap data={nested ?? data} dataKey="size" content={<CustomizedContent />} isAnimationActive={false} />
         </ResponsiveContainer>
       </div>
-      <div className="mt-3 text-xs text-gray-500">Ghi chú: Màu đỏ = tỷ lệ trễ cao; kích thước = số chuyến.</div>
+      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-gray-500">
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: lowColor }} />
+          <span>Tỷ lệ trễ thấp</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: highColor }} />
+          <span>Tỷ lệ trễ cao</span>
+        </div>
+          <span>Ghi chú: Kích thước = số chuyến.</span>
+          <span>Dòng đầu tiên trong các ô là các sân bay tại điểm đi. TSN: Tân Sơn Nhất, NB: Nội Bài, DN: Đà Nẵng</span>
+      </div>
     </div>
   );
 }

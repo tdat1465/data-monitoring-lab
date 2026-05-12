@@ -2,8 +2,19 @@
 
 import { useMemo } from 'react';
 
-export function TemperatureHeatmap({ rawWeatherHistory = [] }: any) {
-  const airports = ['VVNB', 'VVDN', 'VVTS'];
+export function TemperatureHeatmap({ rawWeatherHistory = [], selectedAirport = null }: any) {
+  // Map airport codes to ICAO codes
+  const airportToIcao: Record<string, string> = {
+    'NB': 'VVNB',
+    'DN': 'VVDN',
+    'TSN': 'VVTS'
+  };
+  
+  // Filter airports based on selected airport
+  const airports = selectedAirport && airportToIcao[selectedAirport] 
+    ? [airportToIcao[selectedAirport]]
+    : ['VVNB', 'VVDN', 'VVTS'];
+    
   const airportNames: Record<string, string> = {
     'VVNB': 'Nội Bài',
     'VVDN': 'Đà Nẵng',
@@ -46,7 +57,7 @@ export function TemperatureHeatmap({ rawWeatherHistory = [] }: any) {
         }))
       };
     });
-  }, [rawWeatherHistory]);
+  }, [rawWeatherHistory, selectedAirport]);
 
   const getColor = (temp: number) => {
     if (temp <= 0) return '#f3f4f6';
@@ -62,7 +73,7 @@ export function TemperatureHeatmap({ rawWeatherHistory = [] }: any) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
           <h2 className="text-lg font-bold text-slate-800">Mật độ Nhiệt độ Hệ thống</h2>
-          <p className="text-xs text-slate-400">Thống kê trung bình theo ngày tại 3 trạm chính</p>
+          <p className="text-xs text-slate-400">Thống kê trung bình theo ngày{selectedAirport ? ` tại ${airportNames[airportToIcao[selectedAirport]]}` : ' tại 3 trạm chính'}</p>
         </div>
         
         {/* Chú thích màu sắc tinh tế hơn */}

@@ -10,7 +10,10 @@ const AIRPORT_LABELS: Record<string, string> = {
   TSN: 'Sân bay Tân Sơn Nhất',
 };
 
-export function PredictedRiskLineChart({ seriesByAirport }: { seriesByAirport: Record<string, Array<{ time: string; avgPredicted: number }>> }) {
+export function PredictedRiskLineChart({ seriesByAirport, selectedAirport }: { seriesByAirport: Record<string, Array<{ time: string; avgPredicted: number }>>, selectedAirport?: string | null }) {
+  // Filter to only show selected airport (or all if none selected)
+  const visibleAirports = selectedAirport ? [selectedAirport] : ['NB', 'DN', 'TSN'];
+  
   // merge into single array keyed by time
   const times = Array.from(new Set([...(seriesByAirport.NB||[]).map(d=>d.time), ...(seriesByAirport.DN||[]).map(d=>d.time), ...(seriesByAirport.TSN||[]).map(d=>d.time)]));
   times.sort();
@@ -33,9 +36,9 @@ export function PredictedRiskLineChart({ seriesByAirport }: { seriesByAirport: R
             <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} label={{ value: 'Phút', angle: -90, position: 'insideLeft', offset: 10 }} />
             <Tooltip />
             <Legend />
-            <Line type="monotone" dataKey="NB" name={AIRPORT_LABELS.NB} stroke={colorForIndex(3)} dot={false} />
-            <Line type="monotone" dataKey="DN" name={AIRPORT_LABELS.DN} stroke={colorForIndex(5)} dot={false} />
-            <Line type="monotone" dataKey="TSN" name={AIRPORT_LABELS.TSN} stroke={colorForIndex(2)} dot={false} />
+            {visibleAirports.includes('NB') && <Line type="monotone" dataKey="NB" name={AIRPORT_LABELS.NB} stroke={colorForIndex(3)} dot={false} />}
+            {visibleAirports.includes('DN') && <Line type="monotone" dataKey="DN" name={AIRPORT_LABELS.DN} stroke={colorForIndex(5)} dot={false} />}
+            {visibleAirports.includes('TSN') && <Line type="monotone" dataKey="TSN" name={AIRPORT_LABELS.TSN} stroke={colorForIndex(2)} dot={false} />}
           </LineChart>
         </ResponsiveContainer>
       </div>

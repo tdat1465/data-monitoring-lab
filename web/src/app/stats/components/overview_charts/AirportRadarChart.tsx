@@ -69,6 +69,9 @@ export function AirportRadarChart({ rawWeatherHistory = [], selectedAirport = nu
           </RadarChart>
         </ResponsiveContainer>
       </div>
+      <p className="mt-4 text-[11px] text-gray-400 italic">
+        Ghi chú: Nhiệt độ (°C) và độ ẩm (%) đã được chia cho 10 để trực quan hóa dễ đọc hơn.
+      </p>
     </div>
   );
 }

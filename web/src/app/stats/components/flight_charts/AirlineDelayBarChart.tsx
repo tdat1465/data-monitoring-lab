@@ -3,10 +3,11 @@
 import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from 'recharts';
 import { colorForIndex } from '@/lib/theme/chartPalette';
+import { Bold } from 'lucide-react';
 
 export function AirlineDelayBarChart({ data }: { data: Array<{ airline: string; delayRate: number; flights: number }> }) {
   const chartData = useMemo(() => {
-    return data.slice(0, 10).map((d) => ({ airline: d.airline, delayRate: d.delayRate, flights: d.flights }));
+    return data.slice(0, 10).map((d) => ({ airline: `${d.airline} (${d.flights})`, delayRate: d.delayRate, flights: d.flights }));
   }, [data]);
 
   return (
@@ -14,13 +15,13 @@ export function AirlineDelayBarChart({ data }: { data: Array<{ airline: string; 
       <h2 className="mb-6 text-xl font-bold text-gray-800">Tỷ lệ trễ theo hãng bay (top 10)</h2>
       <div className="w-full" style={{ height: '450px' }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart layout="vertical" data={chartData} margin={{ top: 10, right: 50, left: 60, bottom: 10 }}>
+          <BarChart layout="vertical" data={chartData} margin={{ top: 10, right: 50, left: 20, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
             <XAxis type="number" tick={{ fontSize: 12, fill: '#6b7280' }} />
-            <YAxis dataKey="airline" type="category" tick={{ fontSize: 13, fill: '#6b7280' }} width={50} interval={0} />
+            <YAxis dataKey="airline" type="category" tick={{ fontSize: 13, fill: '#6b7280' }} width={120} interval={0} />
             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-            <Bar dataKey="delayRate" fill={colorForIndex(1)} radius={[0, 4, 4, 0]} barSize={24}>
-              <LabelList dataKey="delayRate" position="right" fontSize={11} formatter={(val: any) => typeof val === 'number' ? `${val.toFixed(1)}%` : ''} />
+            <Bar dataKey="delayRate" fill={colorForIndex(4)} radius={[0, 4, 4, 0]} barSize={24}>
+              <LabelList dataKey="delayRate" position="right" fill="#374151" fontSize={11} formatter={(val: any) => typeof val === 'number' ? `${val.toFixed(1)}%` : ''} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>

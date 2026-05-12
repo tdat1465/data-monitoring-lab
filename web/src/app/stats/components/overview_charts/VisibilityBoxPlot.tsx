@@ -3,13 +3,31 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-export function VisibilityBoxPlot({ rawWeatherHistory = [] }: any) {
+export function VisibilityBoxPlot({ rawWeatherHistory = [], selectedAirport = null }: any) {
+  // Map airport codes to ICAO codes
+  const airportToIcao: Record<string, string> = {
+    'NB': 'VVNB',
+    'DN': 'VVDN',
+    'TSN': 'VVTS'
+  };
+  
+  const stationNames: Record<string, string> = {
+    'VVNB': 'Nội Bài',
+    'VVDN': 'Đà Nẵng',
+    'VVTS': 'Tân Sơn Nhất'
+  };
+  
   const boxData = useMemo(() => {
-    const stations = [
+    const allStations = [
       { code: 'VVNB', name: 'Nội Bài' },
       { code: 'VVDN', name: 'Đà Nẵng' },
       { code: 'VVTS', name: 'Tân Sơn Nhất' }
     ];
+    
+    // Filter stations based on selected airport
+    const stations = selectedAirport && airportToIcao[selectedAirport]
+      ? allStations.filter(s => s.code === airportToIcao[selectedAirport])
+      : allStations;
 
     return stations.map(s => {
       const vals = rawWeatherHistory
@@ -31,11 +49,11 @@ export function VisibilityBoxPlot({ rawWeatherHistory = [] }: any) {
         avg: avg.toFixed(1)
       };
     });
-  }, [rawWeatherHistory]);
+  }, [rawWeatherHistory, selectedAirport]);
 
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm h-full">
-      <h2 className="mb-4 text-lg font-bold text-gray-800">Biến thiên Tầm nhìn (Miles)</h2>
+      <h2 className="mb-4 text-lg font-bold text-gray-800">Biến thiên Tầm nhìn {selectedAirport ? `- ${stationNames[airportToIcao[selectedAirport]]}` : ''}(Miles)</h2>
       <div className="h-[450px]">
         <ResponsiveContainer width="100%" height={450}>
           <BarChart data={boxData} layout="vertical" margin={{ left: 10, right: 30, bottom: 10 }}>

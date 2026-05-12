@@ -8,7 +8,7 @@ export function RoutePerformanceTable({ data }: { data: Array<{ route: string; d
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
       <h2 className="mb-6 text-xl font-bold text-gray-800">Các tuyến bay có tỷ lệ trễ cao nhất</h2>
-      <div className="overflow-auto max-h-80">
+      <div className="overflow-auto max-h-100">
         <table className="w-full text-sm border-collapse">
           <thead className="bg-gray-50 sticky top-0">
             <tr className="text-left">
@@ -26,8 +26,11 @@ export function RoutePerformanceTable({ data }: { data: Array<{ route: string; d
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>  
       </div>
+      <p className="mt-4 text-[11px] text-gray-400 italic">
+        Lưu ý: Bảng này hiển thị cả các tuyến bay đi và đến, giúp bạn nhanh chóng nhận diện những tuyến cần chú ý để cải thiện chất lượng dịch vụ.
+      </p>
     </div>
   );
 }

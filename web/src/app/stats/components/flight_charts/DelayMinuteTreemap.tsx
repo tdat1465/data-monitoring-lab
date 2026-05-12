@@ -27,13 +27,33 @@ type CellProps = {
   maxCount?: number;
 };
 
+const lowColor = colorForIndex(0);
+const highColor = colorForIndex(5);
+
+const mixChannel = (from: number, to: number, t: number) => Math.round(from + (to - from) * t);
+
+const mixTwoColors = (fromHex: string, toHex: string, t: number) => {
+  const from = fromHex.replace('#', '');
+  const to = toHex.replace('#', '');
+
+  const fromR = parseInt(from.slice(0, 2), 16);
+  const fromG = parseInt(from.slice(2, 4), 16);
+  const fromB = parseInt(from.slice(4, 6), 16);
+
+  const toR = parseInt(to.slice(0, 2), 16);
+  const toG = parseInt(to.slice(2, 4), 16);
+  const toB = parseInt(to.slice(4, 6), 16);
+
+  return `rgb(${mixChannel(fromR, toR, t)}, ${mixChannel(fromG, toG, t)}, ${mixChannel(fromB, toB, t)})`;
+};
+
 function getCellFill(intensity: number) {
-  if (intensity >= 0.8) return colorForIndex(4);
-  if (intensity >= 0.6) return colorForIndex(5);
-  if (intensity >= 0.4) return colorForIndex(6);
-  if (intensity >= 0.2) return '#fdba74';
-  if (intensity > 0) return '#fed7aa';
-  return '#f3f4f6';
+  if (intensity >= 0.8) return mixTwoColors(lowColor, highColor, 0.95);
+  if (intensity >= 0.6) return mixTwoColors(lowColor, highColor, 0.8);
+  if (intensity >= 0.4) return mixTwoColors(lowColor, highColor, 0.6);
+  if (intensity >= 0.2) return mixTwoColors(lowColor, highColor, 0.3);
+  if (intensity > 0) return mixTwoColors(lowColor, highColor, 0.1);
+  return colorForIndex(0);
 }
 
 function TreemapCell({ x = 0, y = 0, width = 0, height = 0, name, size = 0, depth, maxCount = 0 }: CellProps) {
@@ -41,12 +61,12 @@ function TreemapCell({ x = 0, y = 0, width = 0, height = 0, name, size = 0, dept
 
   const intensity = maxCount > 0 ? size / maxCount : 0;
   const fill = getCellFill(intensity);
-  const textColor = intensity >= 0.4 ? '#ffffff' : '#1f2937';
+  const textColor = '#1f2937';
   const showLabel = width >= 42 && height >= 28;
 
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} rx={8} ry={8} fill={fill} stroke="#ffffff" strokeWidth={1} />
+      <rect x={x} y={y} width={width} height={height} rx={8} ry={8} fill={fill} />
       {showLabel && (
         <>
           <text x={x + width / 2} y={y + height / 2 - 4} textAnchor="middle" fill={textColor} fontSize={12} fontWeight={700}>
@@ -113,13 +133,13 @@ export function DelayMinuteTreemap({ data }: { data: Record<string, number> }) {
           <div className="text-lg font-semibold text-gray-900">{summary.distinctMinutes}</div>
         </div>
         <div className="rounded-lg bg-gray-50 px-3 py-2">
-          <div className="text-gray-500">Phút cao nhất</div>
+          <div className="text-gray-500">Phút có tần suất cao nhất</div>
           <div className="text-lg font-semibold text-gray-900">
-            {summary.peak ? `${summary.peak.minute}m` : '-'}
+            {summary.peak ? `${summary.peak.minute} phút` : '-'}
           </div>
         </div>
         <div className="rounded-lg bg-gray-50 px-3 py-2">
-          <div className="text-gray-500">Trung bình mỗi phút</div>
+          <div className="text-gray-500">Trung bình phút trễ</div>
           <div className="text-lg font-semibold text-gray-900">{summary.averagePerMinute.toFixed(1)}</div>
         </div>
       </div>
@@ -129,8 +149,6 @@ export function DelayMinuteTreemap({ data }: { data: Record<string, number> }) {
           <Treemap
             data={summary.nodes}
             dataKey="size"
-            aspectRatio={4 / 3}
-            stroke="#ffffff"
             content={<TreemapCell maxCount={summary.maxCount} />}
           >
             <Tooltip content={<MinuteTreemapTooltip />} />

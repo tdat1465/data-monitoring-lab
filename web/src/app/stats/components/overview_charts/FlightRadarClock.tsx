@@ -3,16 +3,24 @@
 import React from 'react';
 import { colorForIndex } from '@/lib/theme/chartPalette';
 
-const baseColor = colorForIndex(5);
+const lowColor = colorForIndex(0);
+const highColor = colorForIndex(2);
 
-const mixWithWhite = (hex: string, t: number) => {
-  const clean = hex.replace('#', '');
-  const r = parseInt(clean.slice(0, 2), 16);
-  const g = parseInt(clean.slice(2, 4), 16);
-  const b = parseInt(clean.slice(4, 6), 16);
+const mixChannel = (from: number, to: number, t: number) => Math.round(from + (to - from) * t);
 
-  const mix = (v: number) => Math.round(v + (255 - v) * t);
-  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+const mixTwoColors = (fromHex: string, toHex: string, t: number) => {
+  const from = fromHex.replace('#', '');
+  const to = toHex.replace('#', '');
+
+  const fromR = parseInt(from.slice(0, 2), 16);
+  const fromG = parseInt(from.slice(2, 4), 16);
+  const fromB = parseInt(from.slice(4, 6), 16);
+
+  const toR = parseInt(to.slice(0, 2), 16);
+  const toG = parseInt(to.slice(2, 4), 16);
+  const toB = parseInt(to.slice(4, 6), 16);
+
+  return `rgb(${mixChannel(fromR, toR, t)}, ${mixChannel(fromG, toG, t)}, ${mixChannel(fromB, toB, t)})`;
 };
 
 export function FlightRadarClock({ hours }: { hours: Array<{ hour: number; count: number }> }) {
@@ -24,8 +32,8 @@ export function FlightRadarClock({ hours }: { hours: Array<{ hour: number; count
       <div className="grid grid-cols-6 gap-2 text-xs text-gray-600">
         {hours.map(h => (
           <div key={h.hour} className="flex flex-col items-center">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: mixWithWhite(baseColor, h.count / max) }}>
-              <span className="text-white font-semibold">{h.count}</span>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: mixTwoColors(lowColor, highColor, h.count / max) }}>
+              <span className="text-gray-800 font-semibold">{h.count}</span>
             </div>
             <div className="mt-1">{String(h.hour).padStart(2,'0')}</div>
           </div>

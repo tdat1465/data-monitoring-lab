@@ -23,22 +23,22 @@ export function HourlyDelayHeatmap({ data }: { data: HeatmapDataRow[] }) {
   const getColor = (value: number) => {
     const intensity = value / maxDelayed;
     if (intensity === 0) return '#f3f4f6'; // light gray
-    if (intensity < 0.2) return '#fed7aa'; // light orange
-    if (intensity < 0.4) return '#fdba74'; // medium orange
-    if (intensity < 0.6) return colorForIndex(6); // brown
-    if (intensity < 0.8) return colorForIndex(5); // dark brown
-    return colorForIndex(4); // darker brown
+    if (intensity < 0.2) return colorForIndex(0); // 
+    if (intensity < 0.4) return colorForIndex(9); // medium orange
+    if (intensity < 0.6) return colorForIndex(1); // brown
+    if (intensity < 0.8) return colorForIndex(2); // dark brown
+    return colorForIndex(7); // darker brown
   };
 
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
       <h2 className="mb-6 text-xl font-bold text-gray-800">Chuyến bay trễ theo ngày và giờ (heatmap)</h2>
-      <div className="w-full overflow-x-auto">
+      <div className="w-full">
         {/* Legend */}
         <div className="flex items-center gap-2 text-xs text-gray-600 mb-4 pb-4">
           <span className="font-semibold">Thấp</span>
           <div className="flex gap-1">
-            {['#f3f4f6', '#fed7aa', '#fdba74', colorForIndex(6), colorForIndex(5), colorForIndex(4)].map((color, idx) => (
+            {['#f3f4f6', colorForIndex(0), colorForIndex(9), colorForIndex(1), colorForIndex(2), colorForIndex(7)].map((color, idx) => (
               <div
                 key={`legend-${idx}`}
                 className="w-5 h-5 rounded"
@@ -53,11 +53,11 @@ export function HourlyDelayHeatmap({ data }: { data: HeatmapDataRow[] }) {
         <div className="border border-gray-200 rounded-lg overflow-hidden">
           {/* Header (Hours) */}
           <div className="flex">
-            <div className="w-12 bg-gray-100 border-r border-b border-gray-200" />
+            <div className="w-15 bg-gray-100 border-r border-b border-gray-200" />
             {Array.from({ length: 24 }, (_, i) => (
               <div
                 key={i}
-                className="w-10 h-10 flex items-center justify-center bg-gray-100 border-r border-b border-gray-200 text-xs font-semibold text-gray-700"
+                className="flex-1 h-8 flex items-center justify-center bg-gray-100 border-r border-b border-gray-200 text-[10px] font-semibold text-gray-700"
               >
                 {String(i).padStart(2, '0')}
               </div>
@@ -68,7 +68,7 @@ export function HourlyDelayHeatmap({ data }: { data: HeatmapDataRow[] }) {
           {chartData.map((row) => (
             <div key={row.day} className="flex">
               {/* Day Label */}
-              <div className="w-12 bg-gray-50 border-r border-b border-gray-200 flex items-center justify-center text-xs font-semibold text-gray-700">
+              <div className="w-15 bg-gray-50 border-r border-b border-gray-200 flex items-center justify-center text-xs font-semibold text-gray-700">
                 {row.day}
               </div>
 
@@ -79,11 +79,11 @@ export function HourlyDelayHeatmap({ data }: { data: HeatmapDataRow[] }) {
                 return (
                   <div
                     key={`${row.day}-${i}`}
-                    className="w-10 h-10 flex items-center justify-center border-r border-b border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                    className="flex-1 h-8 flex items-center justify-center border-r border-b border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
                     style={{ backgroundColor: getColor(value) }}
                     title={`${row.day} ${String(i).padStart(2, '0')}:00 - ${value} delays`}
                   >
-                    {value > 0 && <span className="text-xs font-semibold text-gray-800">{value}</span>}
+                    {value > 0 && <span className="text-[9px] font-semibold text-gray-800">{value}</span>}
                   </div>
                 );
               })}
