@@ -138,12 +138,18 @@ def save_dataframe(df: pd.DataFrame, table_name: str, unique_cols: list[str]) ->
                     for col in update_cols
                 )
 
-                where_clause = sql.SQL(" OR ").join(
-                    sql.SQL("{}.{} IS DISTINCT FROM EXCLUDED.{}").format(
-                        sql.Identifier(table_name), sql.Identifier(col), sql.Identifier(col)
+                # We only check if ACTUAL data has changed (ignore the scrape timestamp changing)
+                meaningful_cols = [col for col in update_cols if col not in ("data_retrieved_at_vn", "Data Retrieved At (VN)")]
+                
+                if not meaningful_cols:
+                    where_clause = sql.SQL("FALSE") # Do not update if only timestamp is left
+                else:
+                    where_clause = sql.SQL(" OR ").join(
+                        sql.SQL("{}.{} IS DISTINCT FROM EXCLUDED.{}").format(
+                            sql.Identifier(table_name), sql.Identifier(col), sql.Identifier(col)
+                        )
+                        for col in meaningful_cols
                     )
-                    for col in update_cols
-                )
 
                 insert_query = sql.SQL(
                     """
