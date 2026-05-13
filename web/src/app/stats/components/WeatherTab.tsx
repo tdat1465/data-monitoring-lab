@@ -15,6 +15,9 @@ export function WeatherTab({
   initialDateRange 
 }: any) {
 
+  console.table(rawWeatherHistory)
+  
+
   const getInitialDates = () => {
     const today = new Date();
     const sevenDaysAgo = new Date();
@@ -67,6 +70,7 @@ export function WeatherTab({
   }, [rawWeatherHistory, appliedDateRange]);
 
   const airportIcaoMap: Record<string, string> = { NB: 'VVNB', DN: 'VVDN', TSN: 'VVTS' };
+  
   const processedData = useMemo(() => {
     if (!rawWeatherHistory || rawWeatherHistory.length === 0) return [];
 

@@ -17,7 +17,17 @@ export function AirportComparisonChart({ rawWeatherHistory = [] }: any) {
   const chartData = useMemo(() => {
     return rawWeatherHistory.map((row: any) => {
       const dateObj = new Date(row.report_time_vn);
-      const timeLabel = `${dateObj.getHours()}:${dateObj.getMinutes().toString().padStart(2, '0')} ${dateObj.getDate()}/${dateObj.getMonth() + 1}`;
+      console.log(row.report_time_vn, typeof row.report_time_vn, new Date(row.report_time_vn).toISOString());
+      // const timeLabel = `${dateObj.getHours()}:${dateObj.getMinutes().toString().padStart(2, '0')} ${dateObj.getDate()}/${dateObj.getMonth() + 1}`;
+
+      // Thay vì getHours(), getDate() — dùng ICT offset +7
+      const hours = (dateObj.getUTCHours() + 7) % 24;
+      const minutes = dateObj.getUTCMinutes().toString().padStart(2, '0');
+      const date = new Date(dateObj.getTime() + 7 * 60 * 60 * 1000);
+      const day = date.getUTCDate();
+      const month = date.getUTCMonth() + 1;
+
+      const timeLabel = `${hours}:${minutes} ${day}/${month}`;
 
       return {
         time: timeLabel,
