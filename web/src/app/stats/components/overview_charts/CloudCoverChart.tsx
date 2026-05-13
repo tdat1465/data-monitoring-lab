@@ -58,8 +58,16 @@ export function CloudCoverChart({ rawWeatherHistory = [],filteredFlights = [], s
 
             // Lưu vào từ điển để chuyến bay đối chiếu
             if (row.icao_code && row.report_time_vn) {
-                const hour = new Date(row.report_time_vn).toISOString().slice(0, 13); // Lấy đến phần Giờ
-                weatherLookup[`${row.icao_code}_${hour}`] = cover;
+                // Format hour in Vietnam timezone (UTC+7)
+                const hour = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Ho_Chi_Minh',
+                    hourCycle: 'h23',
+                    hour: '2-digit',
+                }).format(new Date(row.report_time_vn));
+                const day = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Ho_Chi_Minh',
+                }).format(new Date(row.report_time_vn));
+                weatherLookup[`${row.icao_code}_${day}_${hour}`] = cover;
             }
         });
 
@@ -69,9 +77,17 @@ export function CloudCoverChart({ rawWeatherHistory = [],filteredFlights = [], s
             if (selectedAirport && f.source_airport !== selectedAirport) return;
 
             const icao = reverseAirportMap[f.source_airport] || f.source_airport;
-            const hour = new Date(f.scheduled_dt).toISOString().slice(0, 13);
-            
-            const flightCover = weatherLookup[`${icao}_${hour}`];
+            // Format hour in Vietnam timezone (UTC+7)
+            const hour = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Ho_Chi_Minh',
+                hourCycle: 'h23',
+                hour: '2-digit',
+            }).format(new Date(f.scheduled_dt));
+            const day = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Ho_Chi_Minh',
+            }).format(new Date(f.scheduled_dt));
+
+            const flightCover = weatherLookup[`${icao}_${day}_${hour}`];
             
             // Nếu chuyến bay nằm trong giờ có ghi nhận thời tiết
             if (flightCover && flightStats[flightCover]) {
