@@ -34,7 +34,10 @@ export function TemperatureHeatmap({ rawWeatherHistory = [], selectedAirport = n
       const dateObj = new Date(d.report_time_vn);
       if (isNaN(dateObj.getTime())) return;
 
-      const date = dateObj.toLocaleDateString('en-CA'); // YYYY-MM-DD
+      // Format date in Vietnam timezone (UTC+7)
+      const date = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+      }).format(dateObj);
       
       if (!group[code][date]) group[code][date] = [];
       
@@ -106,16 +109,17 @@ export function TemperatureHeatmap({ rawWeatherHistory = [], selectedAirport = n
             <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
               {airport.data.map(d => (
                 <div key={d.date} className="group relative">
-                  <div 
+                  <div
                     className="w-10 h-10 sm:w-11 sm:h-11 rounded-sm transition-all duration-300 hover:ring-2 hover:ring-offset-2 hover:ring-slate-300 flex items-center justify-center cursor-default"
                     style={{ backgroundColor: getColor(d.avgTemp) }}
                   >
-                    <span className="text-[9px] font-bold text-white/80">{new Date(d.date).getDate()}</span>
+                    {/* Day is already in YYYY-MM-DD format from Vietnam timezone */}
+                    <span className="text-[9px] font-bold text-white/80">{d.date.split('-')[2]}</span>
                   </div>
-                  
+
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-slate-900 text-white text-[10px] py-1.5 px-2.5 rounded-lg shadow-2xl z-20 whitespace-nowrap">
                     <div className="font-semibold border-b border-white/10 pb-1 mb-1">{airport.name}</div>
-                    <div>{new Date(d.date).toLocaleDateString('vi-VN')}: <span className="font-bold">{d.avgTemp.toFixed(1)}°C</span></div>
+                    <div>{d.date.split('-')[2]}/{d.date.split('-')[1]}: <span className="font-bold">{d.avgTemp.toFixed(1)}°C</span></div>
                   </div>
                 </div>
               ))}

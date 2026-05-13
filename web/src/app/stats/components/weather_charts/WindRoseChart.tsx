@@ -36,8 +36,16 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
       const speed = Number(row.wind_speed_kt);
       if (deg === null || deg === undefined) return;
 
-      // Gom theo khung giờ (YYYY-MM-DDTHH)
-      const reportHour = new Date(row.report_time_vn).toISOString().slice(0, 13);
+      // Gom theo khung giờ (YYYY-MM-DDTHH) in Vietnam timezone
+      const reportDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        hourCycle: 'h23',
+        hour: '2-digit',
+      }).format(new Date(row.report_time_vn));
+      const day = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+      }).format(new Date(row.report_time_vn));
+      const reportHour = `${day}T${reportDate}`;
       
       // Lưu lại hướng gió đầu tiên tìm thấy trong giờ đó
       if (!hourlyWind[reportHour]) {
@@ -65,7 +73,16 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
       if (!f.scheduled_dt) return;
       if (selectedAirport && f.source_airport !== selectedAirport) return;
 
-      const flightHour = new Date(f.scheduled_dt).toISOString().slice(0, 13);
+      // Format flight hour in Vietnam timezone
+      const flightHourStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        hourCycle: 'h23',
+        hour: '2-digit',
+      }).format(new Date(f.scheduled_dt));
+      const flightDay = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+      }).format(new Date(f.scheduled_dt));
+      const flightHour = `${flightDay}T${flightHourStr}`;
       const windDeg = hourlyWind[flightHour];
 
       if (windDeg !== undefined) {
