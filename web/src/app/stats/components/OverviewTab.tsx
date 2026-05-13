@@ -10,22 +10,23 @@ import { AirportRadarChart } from './overview_charts/AirportRadarChart';
 import { TemperatureHeatmap } from './overview_charts/TemperatureHeatmap';
 import { VisibilityBoxPlot } from './overview_charts/VisibilityBoxPlot';
 import { CloudCoverChart } from './overview_charts/CloudCoverChart';
+import { ActualVsPredictedChart } from './overview_charts/ActualVsPredictedChart';
 
 import type { Flight } from '@/types/flight';
 import type { WeatherMETAR } from '@/types/weather';
 
 
 
-export function OverviewTab({ 
-  flights, 
+export function OverviewTab({
+  flights,
   rawWeatherHistory,
   onDateFilter,
   initialDateRange,
- }: { 
-  flights: Flight[], 
-  rawWeatherHistory: WeatherMETAR[], 
-  onDateFilter: any, 
-  initialDateRange : any 
+}: {
+  flights: Flight[],
+  rawWeatherHistory: WeatherMETAR[],
+  onDateFilter: any,
+  initialDateRange: any
 }) {
 
   const getInitialDates = () => {
@@ -49,14 +50,14 @@ export function OverviewTab({
 
   const filteredData = useMemo(() => {
     if (!rawWeatherHistory || rawWeatherHistory.length === 0) return [];
-    
+
     return rawWeatherHistory.filter((row: any) => {
       if (!appliedDateRange.start || !appliedDateRange.end) return true;
 
       const reportTime = new Date(row.report_time_vn).getTime();
       // So sánh với ICT boundary: 3/5 00:00 ICT = 2/5 17:00 UTC
       const startTime = new Date(`${appliedDateRange.start}T00:00:00+07:00`).getTime();
-      const endTime   = new Date(`${appliedDateRange.end}T23:59:59.999+07:00`).getTime();
+      const endTime = new Date(`${appliedDateRange.end}T23:59:59.999+07:00`).getTime();
 
       return reportTime >= startTime && reportTime <= endTime;
     });
@@ -100,13 +101,13 @@ export function OverviewTab({
       onDateFilter(todayRange);
     }
   };
-  
+
   if (!rawWeatherHistory || rawWeatherHistory.length === 0) {
     return <div className="p-8 text-center text-gray-500">Đang chuẩn bị dữ liệu tổng quan...</div>;
   }
   // thêm trường hợp delay_minutes >= 15 để khớp với logic của FlightTab
-  const getDelayFlag = (flight: Flight) => Number(flight.label_delay ?? 0) === 1 || 
-                                          Number(flight.delay_minutes ?? 0) >= 15;
+  const getDelayFlag = (flight: Flight) => Number(flight.label_delay ?? 0) === 1 ||
+    Number(flight.delay_minutes ?? 0) >= 15;
 
   const getFlightDate = (scheduledDt: string | Date | null | undefined) => {
     if (!scheduledDt) return '';
@@ -149,8 +150,8 @@ export function OverviewTab({
   const delayRate = totalFlights ? (delayedCount / totalFlights) * 100 : 0;
 
   // Weather KPIs from filteredData
-  const avgVisibility = filteredData.length ? (filteredData.reduce((s:any,r:any)=> s + (Number(r.visibility_miles)||0),0) / filteredData.length) : null;
-  const avgWind = filteredData.length ? (filteredData.reduce((s:any,r:any)=> s + (Number(r.wind_speed_kt)||0),0) / filteredData.length) : null;
+  const avgVisibility = filteredData.length ? (filteredData.reduce((s: any, r: any) => s + (Number(r.visibility_miles) || 0), 0) / filteredData.length) : null;
+  const avgWind = filteredData.length ? (filteredData.reduce((s: any, r: any) => s + (Number(r.wind_speed_kt) || 0), 0) / filteredData.length) : null;
 
   // ML predictions for next 12 hours
   const now = new Date();
@@ -168,7 +169,7 @@ export function OverviewTab({
     return t >= baseDate.getTime() && t <= twelveHoursLater.getTime();
   });
 
-  const airports = ['NB','DN','TSN'];
+  const airports = ['NB', 'DN', 'TSN'];
   const getAirlineCode = (flight: Flight) => {
     return flight.airline_code ?? (flight.flight_number ? String(flight.flight_number).match(/^([A-Z0-9]{2})/)?.[0] ?? 'UNK' : 'UNK');
   };
@@ -190,7 +191,7 @@ export function OverviewTab({
     const end = new Date(start.getTime() + intervalMins * 60 * 1000);
     airports.forEach((ap) => {
       const items = flightsFor12hPrediction.filter(f => f.source_airport === ap && f.scheduled_dt && new Date(f.scheduled_dt) >= start && new Date(f.scheduled_dt) < end);
-      const avg = items.length ? items.reduce((s, x) => s + (Number(x.predict_delay_minutes)||0),0) / items.length : 0;
+      const avg = items.length ? items.reduce((s, x) => s + (Number(x.predict_delay_minutes) || 0), 0) / items.length : 0;
       seriesByAirport[ap].push({ time: start.toISOString(), avgPredicted: Number(avg.toFixed(2)) });
     });
   });
@@ -204,11 +205,11 @@ export function OverviewTab({
     if (getDelayFlag(f)) airlineAgg[a].delayed += 1;
   });
 
-  const treemapNodes = Object.entries(airlineAgg).map(([k,v]) => ({
+  const treemapNodes = Object.entries(airlineAgg).map(([k, v]) => ({
     name: k,
     size: v.flights,
     delayRate: v.flights ? (v.delayed / v.flights) : 0
-  })).sort((a,b)=> b.size - a.size);
+  })).sort((a, b) => b.size - a.size);
 
   // airport -> airline aggregation for nested treemap
   const airportAirlineAgg: Record<string, Record<string, { flights: number; delayed: number }>> = {};
@@ -224,34 +225,34 @@ export function OverviewTab({
   // Radar clock: counts of delayed flights per hour
   const getHourInVN = (scheduledDt: string | Date | null | undefined) => {
     if (!scheduledDt) return null;
-  
+
     const date = scheduledDt instanceof Date ? scheduledDt : new Date(scheduledDt);
     if (isNaN(date.getTime())) return null;
-  
+
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Ho_Chi_Minh',
       hour: '2-digit',
       hour12: false,
     }).formatToParts(date);
-  
+
     const hour = parts.find(part => part.type === 'hour')?.value;
     return hour ? Number(hour) : null;
   };
-  
+
   const radarHours = Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0 }));
   flightsInRange.forEach((f) => {
     if (!getDelayFlag(f)) return;
-  
+
     const hour = getHourInVN(f.scheduled_dt);
     if (hour === null || Number.isNaN(hour)) return;
-  
+
     radarHours[hour].count += 1;
   });
 
   // ML average risk across all airports and intervals
   const allPreds: number[] = [];
   Object.values(seriesByAirport).forEach(arr => arr.forEach(x => allPreds.push(x.avgPredicted)));
-  const mlAvg = allPreds.length ? (allPreds.reduce((s,n)=>s+n,0) / allPreds.length) : 0;
+  const mlAvg = allPreds.length ? (allPreds.reduce((s, n) => s + n, 0) / allPreds.length) : 0;
 
   return (
     <div className="space-y-6">
@@ -287,10 +288,15 @@ export function OverviewTab({
         <AirlineEfficiencyTreemap nodes={treemapNodes} byAirport={airportAirlineAgg} />
       </div>
 
+      {/* So sánh Actual vs Predicted delay */}
+      <div>
+        <ActualVsPredictedChart flights={flightsInRange} selectedAirport={selectedAirport} />
+      </div>
+
       {/* GRID BIỂU ĐỒ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="w-full">
-          <CloudCoverChart rawWeatherHistory={filteredData} filteredFlights={flights} selectedAirport={selectedAirport}/>
+          <CloudCoverChart rawWeatherHistory={filteredData} filteredFlights={flights} selectedAirport={selectedAirport} />
         </div>
         <div className="w-full">
           <TemperatureHeatmap rawWeatherHistory={filteredData} />
