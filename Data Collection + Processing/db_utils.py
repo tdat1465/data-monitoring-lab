@@ -119,22 +119,45 @@ def save_dataframe(df: pd.DataFrame, table_name: str, unique_cols: list[str]) ->
             # Ensure there is a matching unique index for ON CONFLICT.
             _ensure_unique_index(cur, table_name, unique_cols)
 
-            update_defs = sql.SQL(", ").join(
-                sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
-                for col in columns
-            )
+            update_cols = [col for col in columns if col not in unique_cols]
 
-            insert_query = sql.SQL(
-                """
-                INSERT INTO {} ({}) VALUES %s
-                ON CONFLICT ({}) DO UPDATE SET {}
-                """
-            ).format(
-                sql.Identifier(table_name),
-                sql.SQL(", ").join(sql.Identifier(col) for col in columns),
-                unique_defs,
-                update_defs
-            )
+            if not update_cols:
+                insert_query = sql.SQL(
+                    """
+                    INSERT INTO {} ({}) VALUES %s
+                    ON CONFLICT ({}) DO NOTHING
+                    """
+                ).format(
+                    sql.Identifier(table_name),
+                    sql.SQL(", ").join(sql.Identifier(col) for col in columns),
+                    unique_defs
+                )
+            else:
+                update_defs = sql.SQL(", ").join(
+                    sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
+                    for col in update_cols
+                )
+
+                where_clause = sql.SQL(" OR ").join(
+                    sql.SQL("{}.{} IS DISTINCT FROM EXCLUDED.{}").format(
+                        sql.Identifier(table_name), sql.Identifier(col), sql.Identifier(col)
+                    )
+                    for col in update_cols
+                )
+
+                insert_query = sql.SQL(
+                    """
+                    INSERT INTO {} ({}) VALUES %s
+                    ON CONFLICT ({}) DO UPDATE SET {}
+                    WHERE {}
+                    """
+                ).format(
+                    sql.Identifier(table_name),
+                    sql.SQL(", ").join(sql.Identifier(col) for col in columns),
+                    unique_defs,
+                    update_defs,
+                    where_clause
+                )
 
             execute_values(cur, insert_query.as_string(cur), records, page_size=500)
 
