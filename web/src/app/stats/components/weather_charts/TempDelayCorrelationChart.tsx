@@ -53,7 +53,7 @@ export function TempDelayCorrelationChart({ rawWeatherHistory }: { rawWeatherHis
         <div className="bg-white p-3 border border-gray-200 shadow-lg rounded-lg">
           <p className="font-bold text-gray-700">{`Nhiệt độ: ${label}`}</p>
           <p className="text-[#e07a5f]">
-            {`Tỉ lệ trễ TB: ${payload[0].value}%`}
+            {`Tỉ lệ Trễ: ${payload[0].value}%`}
           </p>
         </div>
       );

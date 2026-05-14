@@ -53,7 +53,7 @@ export function VisibilityBoxPlot({ rawWeatherHistory = [], selectedAirport = nu
 
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm h-full">
-      <h2 className="mb-4 text-lg font-bold text-gray-800">Biến thiên Tầm nhìn {selectedAirport ? `- ${stationNames[airportToIcao[selectedAirport]]}` : ''}(Miles)</h2>
+      <h2 className="mb-4 text-lg font-bold text-gray-800">Biến thiên Tầm nhìn {selectedAirport ? `- ${stationNames[airportToIcao[selectedAirport]]}` : ''}(Dặm)</h2>
       <div className="h-[450px]">
         <ResponsiveContainer width="100%" height={450}>
           <BarChart data={boxData} layout="vertical" margin={{ left: 10, right: 30, bottom: 10 }}>
@@ -68,9 +68,9 @@ export function VisibilityBoxPlot({ rawWeatherHistory = [], selectedAirport = nu
                   return (
                     <div className="bg-white p-3 border rounded-lg shadow-lg text-sm">
                       <p className="font-bold border-bottom mb-1">{data.name}</p>
-                      <p className="text-[#81b29a]">Min: {data.low} miles</p>
-                      <p className="text-[#e07a5f]">Max: {(data.low + data.range).toFixed(1)} miles</p>
-                      <p className="text-[#f2cc8f] font-bold">Trung bình: {data.avg} miles</p>
+                      <p className="text-[#81b29a]">Min: {data.low} dặm</p>
+                      <p className="text-[#e07a5f]">Max: {(data.low + data.range).toFixed(1)} dặm</p>
+                      <p className="text-[#f2cc8f] font-bold">Trung bình: {data.avg} dặm</p>
                     </div>
                   );
                 }
