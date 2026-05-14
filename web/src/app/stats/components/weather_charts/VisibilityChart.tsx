@@ -32,8 +32,8 @@ export function VisibilityChart({ rawWeatherHistory = [], selectedAirport }: any
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
       <h2 className="mb-6 text-xl font-bold text-gray-800">Biểu đồ tầm nhìn</h2>
-      <div className="w-full h-[478px]">
-        <ResponsiveContainer width="100%" height={478}>
+      <div className="w-full h-[450]">
+        <ResponsiveContainer width="100%" height={450}>
           <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
             
             {/* Cấu hình dải màu Gradient: Xanh (Cao) -> Vàng -> Đỏ (Đáy) */}

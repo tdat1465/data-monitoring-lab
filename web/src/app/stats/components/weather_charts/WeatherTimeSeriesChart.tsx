@@ -19,8 +19,23 @@ export function WeatherTimeSeriesChart({ rawWeatherHistory = [], selectedAirport
   const chartData = useMemo(() => {
     return rawWeatherHistory.map((row: any) => {
       const dateObj = new Date(row.report_time_vn);
-      // Định dạng: HH:mm DD/MM
-      const label = `${dateObj.getHours()}:${dateObj.getMinutes().toString().padStart(2, '0')} ${dateObj.getDate()}/${dateObj.getMonth() + 1}`;
+      // Format time in Vietnam timezone (UTC+7)
+      const timeParts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).formatToParts(dateObj);
+      const hour = timeParts.find(p => p.type === 'hour')?.value || '00';
+      const minute = timeParts.find(p => p.type === 'minute')?.value || '00';
+      const dayParts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        day: '2-digit',
+        month: '2-digit',
+      }).formatToParts(dateObj);
+      const day = dayParts.find(p => p.type === 'day')?.value || '01';
+      const month = dayParts.find(p => p.type === 'month')?.value || '01';
+      const label = `${hour}:${minute} ${day}/${month}`;
       
       // Lấy delay rate tương ứng theo sân bay được chọn
       const delayRate = selectedAirport === 'DN' ? row.Delay_DN 

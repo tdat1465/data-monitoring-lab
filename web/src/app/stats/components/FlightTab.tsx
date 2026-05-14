@@ -172,10 +172,29 @@ export function FlightTab({
     }
   };
 
+  // Deduplicate flights: a single physical flight (e.g., VJ1208 SGN→HAN) appears twice in the DB:
+  //   - As Arrival at destination airport (NB, DN, or TSN)
+  //   - As Departure from origin airport (may not be NB/DN/TSN)
+  // We count each flight_number+date combination only once to get the actual flight count.
+  const deduplicateFlights = (flightList: any[]) => {
+    const unique = new Map<string, any>();
+    flightList.forEach((f) => {
+      const flightDate = f.scheduled_dt?.split('T')[0] ?? '';
+      // Use flight_number + date as key (ignore source_airport to deduplicate across airports)
+      const key = `${f.flight_number}_${flightDate}`;
+      if (!unique.has(key)) {
+        unique.set(key, f);
+      }
+    });
+    return Array.from(unique.values());
+  };
+
   // Normalize input records (parse dates, cast numbers, extract airline_code/hour)
   const normalized = useMemo(() => {
     if (!flights || flights.length === 0) return [] as any[];
-    return flights.map((r: any) => {
+    // Deduplicate flights first
+    const uniqueFlights = deduplicateFlights(flights);
+    return uniqueFlights.map((r: any) => {
       let scheduledHour: number | null = null;
       try {
         const hourFromServer = Number(r.scheduled_hour);
