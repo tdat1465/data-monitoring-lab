@@ -91,13 +91,14 @@ export async function getFlightsByDateRange(startDate: string, endDate: string):
 
   const sql = `
     SELECT * FROM (
-      SELECT DISTINCT ON (s.flight_number)
+      SELECT DISTINCT ON (substring(s.scheduled_dt from 1 for 10), s.flight_number)
         s.flight_key,
         s.flight_number,
         s.source_airport,
         s.direction,
         s.route_airport_std,
         s.scheduled_dt,
+        substring(s.scheduled_dt from 1 for 10) AS scheduled_date,
         substring(s.scheduled_dt from 12 for 2)::int AS scheduled_hour,
         s.estimated_dt,
         s.status_raw,
@@ -113,9 +114,9 @@ export async function getFlightsByDateRange(startDate: string, endDate: string):
       LEFT JOIN flights_predictions p ON s.flight_key = p.flight_key
       WHERE s.flight_date >= $1
         AND s.flight_date <= $2
-      ORDER BY s.flight_number, substring(s.scheduled_dt from 12 for 2)::int DESC
+      ORDER BY substring(s.scheduled_dt from 1 for 10), s.flight_number, substring(s.scheduled_dt from 12 for 2)::int DESC
     ) sub
-    ORDER BY scheduled_hour DESC
+    ORDER BY scheduled_date ASC, scheduled_hour DESC
   `;
 
   const result = await query(sql, [targetStartDate, targetEndDate]);
