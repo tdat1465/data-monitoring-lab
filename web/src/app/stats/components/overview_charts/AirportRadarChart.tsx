@@ -20,8 +20,8 @@ export function AirportRadarChart({ rawWeatherHistory = [], selectedAirport = nu
     const metrics = [
       { key: 'temperature_c', label: 'Nhiệt độ (°C)' },
       { key: 'humidity', label: 'Độ ẩm (%)' },
-      { key: 'wind_speed_kt', label: 'Gió (kt)' },
-      { key: 'visibility_miles', label: 'Tầm nhìn (miles)' }
+      { key: 'wind_speed_kt', label: 'Gió (knot)' },
+      { key: 'visibility_miles', label: 'Tầm nhìn (dặm)' }
     ];
 
     return metrics.map(m => {
