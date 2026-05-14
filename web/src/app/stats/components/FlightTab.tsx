@@ -313,8 +313,13 @@ export function FlightTab({
 
     const minuteDelayCounts: Record<string, number> = {};
     filteredNormalized.forEach((r) => {
-      const m = Number(r.delay_minutes || r.predict_delay_minutes || 0);
-      if (m <= 15) return;
+      if (Number(r.label_delay ?? 0) !== 1) return;
+
+      const actualDelay = Number(r.delay_minutes);
+      const predictedDelay = Number(r.predict_delay_minutes);
+      const m = Number.isFinite(actualDelay) ? actualDelay : predictedDelay;
+
+      if (!Number.isFinite(m) || m < 15) return;
       const key = String(Math.round(m));
       minuteDelayCounts[key] = (minuteDelayCounts[key] || 0) + 1;
     });

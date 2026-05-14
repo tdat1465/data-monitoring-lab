@@ -13,6 +13,8 @@ import {
   Line,
 } from 'recharts';
 import type { Flight } from '@/types/flight';
+import { colorForIndex } from '@/lib/theme/chartPalette';
+// Sử dụng màu sắc từ chartPalette.ts để đảm bảo nhất quán với theme của ứng dụng
 
 interface Props {
   flights: Flight[];
@@ -86,6 +88,20 @@ export function ActualVsPredictedChart({ flights, selectedAirport }: Props) {
     return { mae, rmse, count: n };
   }, [validFlights]);
 
+  const metricColors = useMemo(
+    () => ({
+      count: colorForIndex(10),
+      mae: colorForIndex(6),
+      rmse: colorForIndex(8),
+    }),
+    [],
+  );
+
+  const cardStyle = (color: string) => ({
+    background: `linear-gradient(100deg, ${color}0D, ${color}33)`,
+    borderColor: `${color}26`,
+  });
+
   /* ── Render ────────────────────────────────────────────────────── */
   if (validFlights.length === 0) {
     return (
@@ -108,19 +124,40 @@ export function ActualVsPredictedChart({ flights, selectedAirport }: Props) {
         </p>
       </div>
 
-      {/* Metrics row */}
+      {/* Metrics row: dùng màu từ chartPalette.ts để thống nhất theme */}
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-lg px-3 py-2 border border-blue-100">
-          <div className="text-xs text-blue-500 font-medium">Số mẫu</div>
-          <div className="text-lg font-bold text-blue-800">{metrics.count.toLocaleString()}</div>
+        <div
+          className="rounded-lg px-3 py-2 border"
+          style={cardStyle(metricColors.count)}
+        >
+          <div className="text-xs font-medium" style={{ color: `${metricColors.count}CC` }}>
+            Số mẫu
+          </div>
+          <div className="text-lg font-bold" style={{ color: metricColors.count }}>
+            {metrics.count.toLocaleString()}
+          </div>
         </div>
-        <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 rounded-lg px-3 py-2 border border-amber-100">
-          <div className="text-xs text-amber-600 font-medium">MAE</div>
-          <div className="text-lg font-bold text-amber-800">{metrics.mae.toFixed(2)} <span className="text-xs font-normal">phút</span></div>
+        <div
+          className="rounded-lg px-3 py-2 border"
+          style={cardStyle(metricColors.mae)}
+        >
+          <div className="text-xs font-medium" style={{ color: `${metricColors.mae}CC` }}>
+            MAE
+          </div>
+          <div className="text-lg font-bold" style={{ color: metricColors.mae }}>
+            {metrics.mae.toFixed(2)} <span className="text-xs font-normal">phút</span>
+          </div>
         </div>
-        <div className="bg-gradient-to-br from-rose-50 to-rose-100/50 rounded-lg px-3 py-2 border border-rose-100">
-          <div className="text-xs text-rose-500 font-medium">RMSE</div>
-          <div className="text-lg font-bold text-rose-800">{metrics.rmse.toFixed(2)} <span className="text-xs font-normal">phút</span></div>
+        <div
+          className="rounded-lg px-3 py-2 border"
+          style={cardStyle(metricColors.rmse)}
+        >
+          <div className="text-xs font-medium" style={{ color: `${metricColors.rmse}CC` }}>
+            RMSE
+          </div>
+          <div className="text-lg font-bold" style={{ color: metricColors.rmse }}>
+            {metrics.rmse.toFixed(2)} <span className="text-xs font-normal">phút</span>
+          </div>
         </div>
       </div>
 
@@ -145,8 +182,8 @@ export function ActualVsPredictedChart({ flights, selectedAirport }: Props) {
             <Bar
               dataKey="avgActual"
               name="Thực tế (TB)"
-              fill="#3B82F6"
-              fillOpacity={0.75}
+              fill={colorForIndex(3)}
+              fillOpacity={0.6}
               radius={[4, 4, 0, 0]}
               barSize={20}
             />
@@ -154,9 +191,9 @@ export function ActualVsPredictedChart({ flights, selectedAirport }: Props) {
               type="monotone"
               dataKey="avgPredicted"
               name="Dự đoán (TB)"
-              stroke="#F59E0B"
+              stroke={colorForIndex(2)}
               strokeWidth={2.5}
-              dot={{ r: 4, fill: '#F59E0B', stroke: '#fff', strokeWidth: 2 }}
+              dot={{ r: 4, fill: colorForIndex(2), stroke: '#fff', strokeWidth: 2 }}
               activeDot={{ r: 6 }}
             />
           </ComposedChart>
