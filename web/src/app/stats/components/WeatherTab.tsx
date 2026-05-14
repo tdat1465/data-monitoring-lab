@@ -144,14 +144,13 @@ export function WeatherTab({
 
       const getDelayRateByStation = (flightAirportCode: string) => {
         const stationFlights = fGroup.filter(f => f.source_airport === flightAirportCode);
-        if (stationFlights.length === 0) return 0; 
+        if (stationFlights.length === 0) return 0;
 
         const delayedCount = stationFlights.filter(f => {
-          const isLabelDelayed = Number(f.label_delay ?? 0) === 1;
-          // Lưu ý: Kiểm tra kỹ tên thuộc tính là 'Minutes' hay 'minutes' trong dữ liệu của bạn
-          const isTimeDelayed = Number(f.Minutes ?? 0) >= 15; 
-          
-          return isLabelDelayed || isTimeDelayed;
+          if (Number(f.label_delay ?? 0) === 1) return true;
+          const delayMinutes = Number(f.delay_minutes);
+          if (!isNaN(delayMinutes) && delayMinutes >= 15) return true;
+          return false;
         }).length;
 
         return Number(((delayedCount / stationFlights.length) * 100).toFixed(1));
@@ -159,8 +158,13 @@ export function WeatherTab({
 
       // THÊM MỚI: Hàm tính tỉ lệ trễ cho TẤT CẢ các chuyến bay trong khung giờ
       const getDelayRateAll = () => {
-        if (fGroup.length === 0) return 0; 
-        const delayedCount = fGroup.filter(f => Number(f.label_delay ?? 0) === 1).length;
+        if (fGroup.length === 0) return 0;
+        const delayedCount = fGroup.filter(f => {
+          if (Number(f.label_delay ?? 0) === 1) return true;
+          const delayMinutes = Number(f.delay_minutes);
+          if (!isNaN(delayMinutes) && delayMinutes >= 15) return true;
+          return false;
+        }).length;
         return Number(((delayedCount / fGroup.length) * 100).toFixed(1));
       };
       
