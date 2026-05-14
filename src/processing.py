@@ -212,6 +212,7 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 
     out["temperature_c"] = pd.to_numeric(out["temperature_c"], errors="coerce")
     out["dew_point_c"] = pd.to_numeric(out["dew_point_c"], errors="coerce")
+    out["wind_speed_kt"] = pd.to_numeric(out["wind_speed_kt"], errors="coerce")
     out["visibility_miles"] = pd.to_numeric(out["visibility_miles"], errors="coerce")
 
     out["visibility_bin"] = pd.cut(
@@ -222,6 +223,53 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 
     out["temp_dew_spread"] = out["temperature_c"] - out["dew_point_c"]
     out["is_low_visibility"] = (out["visibility_miles"] <= 3).astype(float)
+    out["is_high_wind"] = (out["wind_speed_kt"] >= 15).astype(float)
+
+    out["fog_risk"] = (
+        (out["temp_dew_spread"] <= 2.5)
+        & (out["wind_speed_kt"] <= 5)
+    ).astype(float)
+    out["is_fog_risk"] = out["fog_risk"]
+
+    cloud_token = (
+        out["cloud_cover"]
+        .astype(str)
+        .str.upper()
+        .str.extract(r"(OVC|BKN|SCT|FEW|CLR|SKC|CAVOK)", expand=False)
+    )
+    cloud_map = {
+        "OVC": 4,
+        "BKN": 3,
+        "SCT": 2,
+        "FEW": 1,
+        "CLR": 0,
+        "SKC": 0,
+        "CAVOK": 0,
+    }
+    out["cloud_severity"] = cloud_token.map(cloud_map)
+
+    out["weather_severity_index"] = (
+        (out["visibility_miles"] <= 3).astype(int)
+        + (out["wind_speed_kt"] >= 15).astype(int)
+        + (out["cloud_severity"] >= 3).astype(int)
+    )
+
+    out["airport_hourly_congestion"] = (
+        out.groupby(
+            ["source_airport", out["scheduled_dt"].dt.date, "scheduled_hour"]
+        )["scheduled_dt"].transform("size")
+    )
+
+    out["is_rush_hour"] = (
+        out["scheduled_hour"].between(6, 9)
+        | out["scheduled_hour"].between(16, 19)
+    ).astype(int)
+
+    source_iata = out["source_airport"].map({"NB": "HAN", "DN": "DAD", "TSN": "SGN"})
+    dest_iata = out["route_airport_std"].str.extract(r"\(([A-Z]{3})\)", expand=False)
+    trunk_routes = {("HAN", "SGN"), ("SGN", "HAN"), ("DAD", "SGN"), ("SGN", "DAD")}
+    route_pairs = pd.Series(list(zip(source_iata, dest_iata)), index=out.index)
+    out["is_trunk_route"] = route_pairs.isin(trunk_routes).astype(int)
 
     return out
 
