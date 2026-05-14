@@ -14,14 +14,14 @@ import { RoutePerformanceTable } from './flight_charts/RoutePerformanceTable';
 
 type DateRange = { start: string; end: string };
 
-export function FlightTab({ 
-  flights, 
+export function FlightTab({
+  flights,
   onDateFilter,
   initialDateRange,
- }: { 
-  flights: Flight[], 
-  onDateFilter: any, 
-  initialDateRange : any 
+}: {
+  flights: Flight[],
+  onDateFilter: any,
+  initialDateRange: any
 }) {
 
   const getInitialDates = () => {
@@ -42,6 +42,7 @@ export function FlightTab({
   const [appliedDateRange, setAppliedDateRange] = useState(defaultDates);
   const [resolution, setResolution] = useState<'raw' | '30m' | '1h' | '1d'>('raw');
   const [selectedAirport, setSelectedAirport] = useState<string | null>(null);
+  const [focusHour, setFocusHour] = useState<number | null>(null);
 
   // Helper functions matching OverviewTab
   const getDelayFlag = (flight: any) => {
@@ -50,11 +51,11 @@ export function FlightTab({
     const delayMinutes = Number(flight.delay_minutes);
     if (!isNaN(delayMinutes) && delayMinutes >= 15) return true;
     else if (!isNaN(delayMinutes) && delayMinutes < 15) return false; // Nếu có delay_minutes rõ ràng dưới 15 phút thì chắc chắn không delayed, không cần xét tiếp
-    
+
     // Nếu không có các giá trị chắc chắn thì xét tiếp predict_delay_minutes để có thể dự đoán trễ nếu delay_minutes chưa được cập nhật
     const predictDelayMinutes = Number(flight.predict_delay_minutes);
     if (!isNaN(delayMinutes) && !isNaN(predictDelayMinutes) && predictDelayMinutes >= 15) return true;
-    
+
     return false;
   };
 
@@ -125,15 +126,15 @@ export function FlightTab({
     const parts = formatter.formatToParts(date);
     const dayPart = parts.find(p => p.type === 'weekday')?.value || 'Sun';
     const hourPart = parts.find(p => p.type === 'hour')?.value || '0';
-    
+
     const dayNamesVi: Record<string, string> = {
-      'Mon': 'Thứ 2', 'Tue': 'Thứ 3', 'Wed': 'Thứ 4', 
+      'Mon': 'Thứ 2', 'Tue': 'Thứ 3', 'Wed': 'Thứ 4',
       'Thu': 'Thứ 5', 'Fri': 'Thứ 6', 'Sat': 'Thứ 7', 'Sun': 'Chủ nhật'
     };
 
-    return { 
-      hour: parseInt(hourPart, 10), 
-      dayName: dayNamesVi[dayPart] || 'Chủ nhật' 
+    return {
+      hour: parseInt(hourPart, 10),
+      dayName: dayNamesVi[dayPart] || 'Chủ nhật'
     };
   };
 
@@ -210,7 +211,7 @@ export function FlightTab({
 
       const airline = r.airline_code ?? (r.flight_number ? String(r.flight_number).match(/^([A-Z0-9]{2})/)?.[0] ?? 'UNK' : 'UNK');
       const delayMinutes = r.delay_minutes == null ? null : Number(r.delay_minutes);
-      
+
       return {
         ...r,
         scheduled_hour: scheduledHour,
@@ -262,14 +263,59 @@ export function FlightTab({
     });
   }, [mappedNormalized, selectedAirport]);
 
+  // Global hour focus — filters ALL charts to a single hour when set
+  const focusFiltered = useMemo(() => {
+    if (focusHour === null) return filteredNormalized;
+    return filteredNormalized.filter((f) => f.scheduled_hour === focusHour);
+  }, [filteredNormalized, focusHour]);
+
+  const handleHourClick = (hour: number) => {
+    setFocusHour((prev) => (prev === hour ? null : hour));
+  };
+
   const processedData = useMemo(() => {
-    const total = filteredNormalized.length;
-    const delayedCount = filteredNormalized.filter(getDelayFlag).length;
+    // Use focusFiltered as the data source so focusHour drives all charts/KPIs
+    const data = focusFiltered;
+    const total = data.length;
+    const delayedCount = data.filter(getDelayFlag).length;
     const delayRate = total ? (delayedCount / total) * 100 : 0;
-    const delayRecords = filteredNormalized.filter((r) => r.delay_minutes !== null);
+    const delayRecords = data.filter((r) => r.delay_minutes !== null);
     const avgDelay = delayRecords.length > 0 ? delayRecords.reduce((s, r) => s + (r.delay_minutes || 0), 0) / delayRecords.length : 0;
-    
-    const statusDist = filteredNormalized.reduce<Record<string, number>>((acc, r) => {
+
+    const hourly = data.reduce<Record<string, {
+      flights: number;
+      delayed: number;
+      avgDelay: number;
+      minDelay: number | null;
+      maxDelay: number | null;
+    }>>((acc, r) => {
+      const hour = getVietnamHour(r.scheduled_dt);
+      if (hour == null) return acc;
+      const key = `${hour}`;
+
+      if (!acc[key]) {
+        acc[key] = {
+          flights: 0,
+          delayed: 0,
+          avgDelay: 0,
+          minDelay: null,
+          maxDelay: null,
+        };
+      }
+
+      acc[key].flights += 1;
+      if (getDelayFlag(r)) {
+        acc[key].delayed += 1;
+        const d = Number(r.delay_minutes);
+        if (!Number.isNaN(d)) {
+          acc[key].minDelay = acc[key].minDelay === null ? d : Math.min(acc[key].minDelay, d);
+          acc[key].maxDelay = acc[key].maxDelay === null ? d : Math.max(acc[key].maxDelay, d);
+        }
+      }
+      return acc;
+    }, {});
+
+    const statusDist = data.reduce<Record<string, number>>((acc, r) => {
       const k = r.status_group || 'other';
       acc[k] = (acc[k] || 0) + 1;
       return acc;
@@ -278,7 +324,7 @@ export function FlightTab({
     const airlineAgg: Record<string, { flights: number; delayed: number }> = {};
     const isSingleDay = initialDateRange.start === initialDateRange.end;
 
-    filteredNormalized.forEach((r) => {
+    data.forEach((r) => {
       const a = r.airline_code ?? 'UNK';
       airlineAgg[a] = airlineAgg[a] || { flights: 0, delayed: 0 };
       airlineAgg[a].flights += 1;
@@ -292,12 +338,12 @@ export function FlightTab({
     // Heatmap Logic
     const hourlyByDay: Record<string, Record<number, number>> = {};
 
-    filteredNormalized.forEach((r) => {
+    data.forEach((r) => {
       const { hour, dayName } = getHourAndDayInVN(r.scheduled_dt);
 
       // Ép toàn bộ dữ liệu vào 1 hàng nếu chỉ chọn 1 ngày (tránh lẹm giờ do múi giờ)
-      const rowKey = isSingleDay 
-        ? (filteredNormalized[0] ? getHourAndDayInVN(filteredNormalized[0].scheduled_dt).dayName : dayName) 
+      const rowKey = isSingleDay
+        ? (data[0] ? getHourAndDayInVN(data[0].scheduled_dt).dayName : dayName)
         : dayName;
 
       if (getDelayFlag(r)) {
@@ -305,14 +351,14 @@ export function FlightTab({
         hourlyByDay[rowKey][hour] = (hourlyByDay[rowKey][hour] || 0) + 1;
       }
     });
-    
+
     const heatmapData = Object.entries(hourlyByDay).map(([day, hours]) => ({
       day,
       ...Object.fromEntries(Array.from({ length: 24 }, (_, i) => [String(i).padStart(2, '0'), hours[i] || 0]))
     }));
 
     const minuteDelayCounts: Record<string, number> = {};
-    filteredNormalized.forEach((r) => {
+    data.forEach((r) => {
       if (Number(r.label_delay ?? 0) !== 1) return;
 
       const actualDelay = Number(r.delay_minutes);
@@ -323,15 +369,15 @@ export function FlightTab({
       const key = String(Math.round(m));
       minuteDelayCounts[key] = (minuteDelayCounts[key] || 0) + 1;
     });
-    
+
     const routeAgg: Record<string, { flights: number; delayed: number }> = {};
-    filteredNormalized.forEach((r) => {
+    data.forEach((r) => {
       const route = r.route_airport_std || 'UNK';
       routeAgg[route] = routeAgg[route] || { flights: 0, delayed: 0 };
       routeAgg[route].flights += 1;
       if (getDelayFlag(r)) routeAgg[route].delayed += 1;
     });
-    
+
 
     const routePerf = Object.entries(routeAgg)
       .map(([route, v]) => ({ route, delayRate: (v.delayed / v.flights) * 100, flights: v.flights }))
@@ -348,7 +394,7 @@ export function FlightTab({
       minuteDelayCounts,
       routePerf,
     };
-  }, [filteredNormalized, initialDateRange]);
+  }, [focusFiltered, initialDateRange]);
 
   return (
     <div className="space-y-6">
@@ -365,6 +411,20 @@ export function FlightTab({
           setSelectedAirport((airport as any) ?? 'ALL');
         }}
       />
+
+      {/* Focus Hour Badge */}
+      {focusHour !== null && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+          <span>🕐</span>
+          <span>Đang lọc khung giờ: <strong>{String(focusHour).padStart(2, '0')}:00 – {String(focusHour).padStart(2, '0')}:59</strong></span>
+          <button
+            onClick={() => setFocusHour(null)}
+            className="ml-auto px-2 py-0.5 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
+          >
+            ✕ Xoá lọc giờ
+          </button>
+        </div>
+      )}
 
       {/* Row 1: KPIs + Donut */}
       <div className="grid grid-cols-12 gap-4">
@@ -389,7 +449,7 @@ export function FlightTab({
 
       {/* Row 2: Airport hourly stacked chart */}
       <div>
-        <AirportHourlyStackedBarChart data={filteredNormalized} />
+        <AirportHourlyStackedBarChart data={focusFiltered} onHourClick={handleHourClick} />
       </div>
 
       {/* Row 3: Airline & Route */}
