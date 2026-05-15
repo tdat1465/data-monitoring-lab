@@ -1,9 +1,11 @@
 import os
 import sys
-import pandas as pd
 from pathlib import Path
+
 import joblib
+import pandas as pd
 import sklearn
+
 
 def find_project_dir() -> Path:
     candidates = [
@@ -16,15 +18,16 @@ def find_project_dir() -> Path:
             if str(candidate) not in sys.path:
                 sys.path.insert(0, str(candidate))
             return candidate
-    
+
     if Path.cwd().name == "src":
         p = Path.cwd().parent / "Data Collection + Processing"
         if (p / "db_utils.py").exists():
             if str(p) not in sys.path:
                 sys.path.insert(0, str(p))
             return p
-            
+
     raise FileNotFoundError("Khong tim thay db_utils.py")
+
 
 def load_env_file(env_path: Path) -> None:
     if not env_path.exists():
@@ -40,49 +43,70 @@ def load_env_file(env_path: Path) -> None:
         if existing is None or existing.strip() == "":
             os.environ[key] = value
 
+
 project_dir = find_project_dir()
 load_env_file(project_dir.parent / ".env")
 
 from db_utils import load_table, save_dataframe
 from processing import FEATURE_COLS, ensure_table_has_columns
 
-def run_inference():
+
+NUMERIC_COLS = [
+    "temperature_c",
+    "dew_point_c",
+    "wind_direction_deg",
+    "wind_speed_kt",
+    "visibility_miles",
+    "scheduled_hour",
+    "scheduled_dayofweek",
+    "scheduled_month",
+    "minutes_to_departure_at_snapshot",
+    "temp_dew_spread",
+    "is_low_visibility",
+    "is_wind_variable",
+    "is_estimated_missing",
+    "flight_num_only",
+    "is_high_wind",
+    "fog_risk",
+    "cloud_severity",
+    "weather_severity_index",
+    "airport_hourly_congestion",
+    "is_rush_hour",
+    "is_trunk_route",
+    "route_delay_rate",
+    "airline_historical_delay_rate",
+    "airport_congestion_2h",
+    "rolling_delay_rate_2h",
+    "sin_hour",
+    "cos_hour",
+]
+
+
+def run_inference() -> None:
     print("Loading current snapshot data...")
     print(f"scikit-learn version: {sklearn.__version__}")
+
     try:
         flights_current = load_table("flights_current_snapshot")
     except Exception as e:
         print(f"Error loading flights_current_snapshot. Make sure processing.py has run successfully. Error: {e}")
         return
-    
+
     if flights_current.empty:
         print("No flights data available for inference.")
         return
 
-    # Filter out flights that have already completed or cancelled to avoid unnecessary predictions
-    # Actually, we can predict for all and just update the dashboard. 
-    # But let's only predict for active/upcoming flights.
-    active_mask = flights_current["status_group"].isin(["unknown", "enroute", "on_time", "delayed", "other"])
-    df_to_predict = flights_current[active_mask].copy()
+    if "status_group" in flights_current.columns:
+        active_mask = flights_current["status_group"].isin(["unknown", "enroute", "on_time", "delayed", "other"])
+        df_to_predict = flights_current[active_mask].copy()
+    else:
+        df_to_predict = flights_current.copy()
 
     if df_to_predict.empty:
         print("No active flights to predict.")
         return
 
-    # Ensure correct types for numeric columns that might have been loaded as string
-    numeric_cols = [
-        "temperature_c", "dew_point_c", "wind_direction_deg", "wind_speed_kt",
-        "visibility_miles", "scheduled_hour", "scheduled_dayofweek", "scheduled_month",
-        "minutes_to_departure_at_snapshot", "temp_dew_spread", "is_low_visibility",
-        "is_wind_variable", "is_estimated_missing", "flight_num_only",
-        "is_high_wind", "fog_risk", "cloud_severity",
-        "weather_severity_index", "airport_hourly_congestion", "is_rush_hour",
-        "is_trunk_route",
-        "route_delay_rate", "airline_historical_delay_rate",
-        "airport_congestion_2h", "rolling_delay_rate_2h",
-        "sin_hour", "cos_hour"
-    ]
-    for col in numeric_cols:
+    for col in NUMERIC_COLS:
         if col in df_to_predict.columns:
             df_to_predict[col] = pd.to_numeric(df_to_predict[col], errors="coerce")
 
@@ -92,7 +116,7 @@ def run_inference():
     if not model_path.exists():
         print(f"Model file not found at {model_path}")
         return
-        
+
     try:
         artifact = joblib.load(model_path)
     except Exception as e:
@@ -143,14 +167,24 @@ def run_inference():
     missing_cols = [c for c in feature_cols if c not in df_to_predict.columns]
     for col in missing_cols:
         df_to_predict[col] = pd.NA
+    if missing_cols:
+        print(f"Missing feature columns filled as NA: {missing_cols}")
+
     predict_frame = df_to_predict[feature_cols].copy()
 
     try:
         if is_two_stage:
             import numpy as np
+
             prob = clf.predict_proba(predict_frame)[:, 1]
             reg_pred = reg.predict(predict_frame)
             predictions = np.where(prob >= threshold, reg_pred, 0.0)
+            pass_rate = float((prob >= threshold).mean()) if len(prob) else 0.0
+            print(
+                f"Two-stage diagnostics | threshold={threshold:.3f} | "
+                f"prob_mean={float(np.mean(prob)):.4f} | prob_p90={float(np.percentile(prob, 90)):.4f} | "
+                f"pass_rate={pass_rate:.4%}"
+            )
         else:
             predictions = model.predict(predict_frame)
     except AttributeError as e:
@@ -168,14 +202,18 @@ def run_inference():
 
     df_to_predict["predict_delay_minutes"] = predictions
 
+    if "flight_key" not in df_to_predict.columns:
+        print("Missing required key column: flight_key")
+        return
+
     predictions_table = df_to_predict[["flight_key", "predict_delay_minutes"]].copy()
-    
+    predictions_table = predictions_table.drop_duplicates(subset=["flight_key"], keep="last")
+
     ensure_table_has_columns("flights_predictions", predictions_table)
-    
-    # Save predictions to PostgreSQL
     inserted = save_dataframe(predictions_table, table_name="flights_predictions", unique_cols=["flight_key"])
-    
+
     print(f"Saved {inserted} predictions to flights_predictions table.")
+
 
 if __name__ == "__main__":
     run_inference()
