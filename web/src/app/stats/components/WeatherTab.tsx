@@ -302,6 +302,19 @@ export function WeatherTab({
   };
 
   if (rawWeatherHistory.length === 0) {
+
+    <DateFilterBar
+        inputDateRange={inputDateRange}
+        setInputDateRange={setInputDateRange}
+        resolution={resolution}
+        setResolution={setResolution}
+        onApply={handleApplyFilter}
+        onClear={handleClearFilter}
+        onToday={handleToday}
+        selectedAirport={selectedAirport}
+        onAirportChange={setSelectedAirport}
+      />
+
     return <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-xl">Dang tai du lieu thoi tiet...</div>;
   }
 
@@ -329,7 +342,7 @@ export function WeatherTab({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TempDelayCorrelationChart rawWeatherHistory={processedData} />
+        <TempDelayCorrelationChart rawWeatherHistory={processedData} dateRange={appliedDateRange} resolution={resolution} />
         <VisibilityChart rawWeatherHistory={processedData} selectedAirport={selectedAirport} />
       </div>
 

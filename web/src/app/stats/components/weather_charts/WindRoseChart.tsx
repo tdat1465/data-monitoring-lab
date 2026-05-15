@@ -7,7 +7,7 @@ import {
 
 export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAirport }: any) {
   const chartData = useMemo(() => {
-    // 1. Khởi tạo 8 hướng chính
+    // 1. Initialize 8 main wind directions
     const directions = [
       { angle: 'N (Bắc)', min: 337.5, max: 22.5 },
       { angle: 'NE (Đông Bắc)', min: 22.5, max: 67.5 },
@@ -21,38 +21,37 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
 
     const counts = directions.map(d => ({
       subject: d.angle,
-      'Tần suất': 0,
-      'Gió mạnh (>=12kt)': 0,
-      'Tỉ lệ trễ (%)': 0,
+      frequency: 0,
+      strongWind: 0,
       delayedFlightsCount: 0,
       totalFlightsInDir: 0,
     }));
 
-    // 2. Gom thời tiết theo giờ để lấy góc gió đại diện cho giờ đó
+    // 2. Group weather by hour to get representative wind direction per hour
     const hourlyWind: Record<string, number> = {};
-    
+
     rawWeatherHistory.forEach((row: any) => {
       const deg = row.wind_direction_deg;
       const speed = Number(row.wind_speed_kt);
       if (deg === null || deg === undefined) return;
 
-      // Gom theo khung giờ (YYYY-MM-DDTHH) in Vietnam timezone
-      const reportDate = new Intl.DateTimeFormat('en-CA', {
+      // Group by hour slot (YYYY-MM-DDTHH) in Vietnam timezone
+      const reportHourStr = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Ho_Chi_Minh',
         hourCycle: 'h23',
         hour: '2-digit',
       }).format(new Date(row.report_time_vn));
-      const day = new Intl.DateTimeFormat('en-CA', {
+      const reportDay = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Ho_Chi_Minh',
       }).format(new Date(row.report_time_vn));
-      const reportHour = `${day}T${reportDate}`;
-      
-      // Lưu lại hướng gió đầu tiên tìm thấy trong giờ đó
+      const reportHour = `${reportDay}T${reportHourStr}`;
+
+      // Store first wind direction found in that hour slot
       if (!hourlyWind[reportHour]) {
         hourlyWind[reportHour] = deg;
       }
 
-      // Đếm tần suất thời tiết
+      // Count weather frequency per direction
       directions.forEach((d, index) => {
         let isMatch = false;
         if (d.angle === 'N (Bắc)') {
@@ -62,8 +61,8 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
         }
 
         if (isMatch) {
-          counts[index]['Tần suất'] += 1;
-          if (speed >= 12) counts[index]['Gió mạnh (>=12kt)'] += 1;
+          counts[index].frequency += 1;
+          if (speed >= 12) counts[index].strongWind += 1;
         }
       });
     });
@@ -87,7 +86,7 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
 
       if (windDeg !== undefined) {
         const isDelayed = Number(f.label_delay ?? 0) === 1;
-        
+
         // Tìm xem gió giờ đó thuộc hướng nào
         let matchIndex = -1;
         directions.forEach((d, index) => {
@@ -98,7 +97,7 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
           }
         });
 
-        // Cộng vào tổng chuyến bay của hướng đó
+        // Accumulate flight counts for that direction
         if (matchIndex !== -1) {
           counts[matchIndex].totalFlightsInDir += 1;
           if (isDelayed) counts[matchIndex].delayedFlightsCount += 1;
@@ -106,38 +105,66 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
       }
     });
 
-    // 4. Tính tỉ lệ phần trăm cuối cùng
-    return counts.map(c => ({
+    // 4. Compute final values & normalize to 0-100 for radar display
+    const intermediate = counts.map(c => ({
       subject: c.subject,
-      'Tần suất': c['Tần suất'] ,
-      'Gió mạnh (>=12kt)': c['Gió mạnh (>=12kt)'],
-      'Tỉ lệ trễ (%)': c.totalFlightsInDir > 0 
-        ? Number(((c.delayedFlightsCount / c.totalFlightsInDir) * 100).toFixed(1)) 
+      freqRaw: c.frequency,
+      strongWindRaw: c.strongWind,
+      delayRateRaw: c.totalFlightsInDir > 0
+        ? Number(((c.delayedFlightsCount / c.totalFlightsInDir) * 100).toFixed(1))
         : 0,
+    }));
+
+    const maxFreq = Math.max(...intermediate.map(d => d.freqRaw), 1);
+    const maxStrongWind = Math.max(...intermediate.map(d => d.strongWindRaw), 1);
+    const maxDelayRate = Math.max(...intermediate.map(d => d.delayRateRaw), 1);
+
+    return intermediate.map(d => ({
+      subject: d.subject,
+      // All three series normalized to 0-100 for visual balance
+      'Tần suất': Number(((d.freqRaw / maxFreq) * 100).toFixed(1)),
+      'Gió mạnh (>=12kt)': Number(((d.strongWindRaw / maxStrongWind) * 100).toFixed(1)),
+      'Tỉ lệ trễ (%)': Number(((d.delayRateRaw / maxDelayRate) * 100).toFixed(1)),
+      // Raw values for tooltip display
+      freqRaw: d.freqRaw,
+      strongWindRaw: d.strongWindRaw,
+      delayRateRaw: d.delayRateRaw,
     }));
   }, [rawWeatherHistory, flights, selectedAirport]);
 
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
       <h2 className="mb-2 text-xl font-bold text-gray-800">Biểu đồ Hoa gió</h2>
-      <p className="mb-6 text-sm text-gray-500">Thống kê hướng gió chủ đạo, gió mạnh và tỉ lệ trễ theo hướng</p>
-      
+      <p className="mb-6 text-sm text-gray-500">
+        Thống kê hướng gió — <span className="italic text-gray-400">Tất cả trường đã chuẩn hóa về thang 0–100</span>
+      </p>
+
       <div className="w-full h-[430px]">
         <ResponsiveContainer width="100%" height={430}>
           <RadarChart cx="50%" cy="50%" outerRadius="75%" data={chartData}>
             <PolarGrid stroke="#e5e7eb" />
             <PolarAngleAxis dataKey="subject" tick={{ fill: '#4b5563', fontSize: 12 }} />
-            {/* Ẩn tick đi để đỡ rối mắt */}
-            <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false} axisLine={false} />
-            
-            {/* THÊM LEGEND: Giúp người dùng click vào để ẩn/hiện các lớp biểu đồ */}
+            <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+
             <Legend verticalAlign="top" height={36} wrapperStyle={{ cursor: 'pointer' }} />
-            
+
             <Radar name="Số bản tin" dataKey="Tần suất" stroke="#81b29a" fill="#81b29a" fillOpacity={0.3} />
             <Radar name="Gió mạnh (>=12kt)" dataKey="Gió mạnh (>=12kt)" stroke="#f2cc8f" fill="#f2cc8f" fillOpacity={0.5} />
             <Radar name="Tỉ lệ trễ (%)" dataKey="Tỉ lệ trễ (%)" stroke="#e07a5f" fill="#e07a5f" fillOpacity={0.6} />
-            
-            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+
+            <Tooltip
+              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+              formatter={(value: any, name: string, props: any) => {
+                const payload = props.payload;
+                if (name === 'Số bản tin') {
+                  return [`${payload.tanSuatRaw} bản tin (${value}%)`, name];
+                }
+                if (name === 'Gió mạnh (>=12kt)') {
+                  return [`${payload.gioManhRaw} bản tin (${value}%)`, name];
+                }
+                return [`${value}%`, name];
+              }}
+            />
           </RadarChart>
         </ResponsiveContainer>
       </div>
