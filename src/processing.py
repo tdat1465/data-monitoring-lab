@@ -344,6 +344,15 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_operational_features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
 
+    def _ensure_source_airport_column(frame: pd.DataFrame) -> pd.DataFrame:
+        if "source_airport" in frame.columns:
+            return frame
+        if "source_airport" in frame.index.names:
+            frame = frame.reset_index()
+            # If reset_index creates duplicate names, keep one source_airport column.
+            frame = frame.loc[:, ~frame.columns.duplicated()]
+        return frame
+
     if "flight_key" not in out.columns:
         key_cols = ["source_airport", "direction", "route_airport_std", "flight_number", "scheduled_dt"]
         if all(c in out.columns for c in key_cols):
@@ -373,8 +382,11 @@ def add_operational_features(df: pd.DataFrame) -> pd.DataFrame:
             g["rolling_delay_rate_2h"] = np.nan
         return g
 
+    out = _ensure_source_airport_column(out)
     out = out.groupby("source_airport", group_keys=False).apply(_congestion)
+    out = _ensure_source_airport_column(out)
     out = out.groupby("source_airport", group_keys=False).apply(_rolling_delay)
+    out = _ensure_source_airport_column(out)
     return out
 
 def add_target_encodings(train_df: pd.DataFrame, apply_df: pd.DataFrame) -> pd.DataFrame:
