@@ -273,6 +273,41 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 
     return out
 
+def add_operational_features(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+
+    def _congestion(g: pd.DataFrame) -> pd.DataFrame:
+        g = g.sort_values("scheduled_dt")
+        if g["scheduled_dt"].notna().any():
+            s = g.set_index("scheduled_dt")
+            g["airport_congestion_2h"] = s["flight_key"].rolling("2h", center=True).count().values
+        else:
+            g["airport_congestion_2h"] = np.nan
+        return g
+
+    def _rolling_delay(g: pd.DataFrame) -> pd.DataFrame:
+        g = g.sort_values("retrieved_at_vn")
+        if g["retrieved_at_vn"].notna().any():
+            s = g.set_index("retrieved_at_vn")
+            g["rolling_delay_rate_2h"] = s["label_delay"].rolling("2h", closed="left").mean().values
+        else:
+            g["rolling_delay_rate_2h"] = np.nan
+        return g
+
+    out = out.groupby("source_airport", group_keys=False).apply(_congestion)
+    out = out.groupby("source_airport", group_keys=False).apply(_rolling_delay)
+    return out
+
+def add_target_encodings(train_df: pd.DataFrame, apply_df: pd.DataFrame) -> pd.DataFrame:
+    out = apply_df.copy()
+    global_rate = train_df["label_delay"].mean()
+    route_rate = train_df.groupby("route_airport_std")["label_delay"].mean()
+    airline_rate = train_df.groupby("airline_code")["label_delay"].mean()
+
+    out["route_delay_rate"] = out["route_airport_std"].map(route_rate).fillna(global_rate)
+    out["airline_historical_delay_rate"] = out["airline_code"].map(airline_rate).fillna(global_rate)
+    return out
+
 def ensure_table_has_columns(table_name: str, df: pd.DataFrame) -> None:
     import psycopg2
     from psycopg2 import sql
@@ -500,6 +535,13 @@ def process_data():
 
     current_features = add_features(current_with_weather)
     training_features = add_features(train_with_weather)
+
+    current_features = add_operational_features(current_features)
+    training_features = add_operational_features(training_features)
+
+    train_base = training_features[training_features["label_delay"].isin([0, 1])].copy()
+    current_features = add_target_encodings(train_base, current_features)
+    training_features = add_target_encodings(train_base, training_features)
 
     training_dataset = training_features[training_features["label_delay"].isin([0, 1])].copy()
     training_dataset["label_delay"] = training_dataset["label_delay"].astype(int)
