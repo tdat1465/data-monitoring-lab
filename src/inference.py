@@ -94,10 +94,42 @@ def run_inference():
         print(f"Failed to load model: {e}")
         return
 
-    model = artifact.get("model") if isinstance(artifact, dict) else artifact
-    feature_cols = artifact.get("feature_cols") if isinstance(artifact, dict) else None
-    if model is None:
-        print("Model artifact is missing 'model'.")
+    is_two_stage = False
+    model = None
+    feature_cols = None
+
+    if isinstance(artifact, dict):
+        if "classifier" in artifact and "regressor" in artifact:
+            is_two_stage = True
+            clf = artifact["classifier"]
+            reg = artifact["regressor"]
+            threshold = artifact.get("threshold", 0.5)
+            feature_cols = artifact.get("feature_cols")
+        else:
+            model = (
+                artifact.get("model")
+                or artifact.get("best_pipe")
+                or artifact.get("pipeline")
+                or artifact.get("estimator")
+            )
+            feature_cols = (
+                artifact.get("feature_cols")
+                or artifact.get("features")
+                or artifact.get("columns")
+            )
+            if model is None:
+                for value in artifact.values():
+                    if hasattr(value, "predict"):
+                        model = value
+                        break
+    else:
+        model = artifact
+
+    if not is_two_stage and model is None:
+        if isinstance(artifact, dict):
+            print(f"Model artifact has no model-like object. Keys: {list(artifact.keys())}")
+        else:
+            print("Model artifact is not a valid model object.")
         return
 
     if feature_cols:
@@ -109,7 +141,13 @@ def run_inference():
         predict_frame = df_to_predict
 
     try:
-        predictions = model.predict(predict_frame)
+        if is_two_stage:
+            import numpy as np
+            prob = clf.predict_proba(predict_frame)[:, 1]
+            reg_pred = reg.predict(predict_frame)
+            predictions = np.where(prob >= threshold, reg_pred, 0.0)
+        else:
+            predictions = model.predict(predict_frame)
     except Exception as e:
         print(f"Error during model prediction: {e}")
         return
