@@ -12,6 +12,7 @@ export interface Flight {
   visibility_miles: number | null;
   wind_speed_kt: number | null;
   cloud_cover: string | null;
+  raw_metar?: string | null;
   predict_delay_minutes: number | null;
   predicted_at: string | null;
   delay_minutes: number | null;

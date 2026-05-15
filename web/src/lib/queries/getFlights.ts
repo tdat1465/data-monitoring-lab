@@ -43,6 +43,7 @@ export async function getFlightsWithPredictions(date?: string): Promise<Flight[]
         s.visibility_miles,
         s.wind_speed_kt,
         s.cloud_cover,
+        s.raw_metar,
         s.delay_minutes,
         s.label_delay,
         COALESCE(p.predict_delay_minutes, NULL) AS predict_delay_minutes
@@ -76,6 +77,7 @@ export async function getAllFlights(): Promise<Flight[]> {
       s.visibility_miles,
       s.wind_speed_kt,
       s.cloud_cover,
+      s.raw_metar,
       s.delay_minutes,
       s.label_delay,
       COALESCE(p.predict_delay_minutes, NULL) AS predict_delay_minutes
@@ -110,6 +112,7 @@ export async function getFlightsByDateRange(startDate: string, endDate: string):
         s.visibility_miles,
         s.wind_speed_kt,
         s.cloud_cover,
+        s.raw_metar,
         s.delay_minutes,
         s.label_delay,
         COALESCE(p.predict_delay_minutes, NULL) AS predict_delay_minutes
@@ -143,6 +146,7 @@ export async function getFlightsByHistory(days: number = 7): Promise<Flight[]> {
       s.visibility_miles,
       s.wind_speed_kt,
       s.cloud_cover,
+      s.raw_metar,
       s.delay_minutes,
       s.label_delay,
       COALESCE(p.predict_delay_minutes, NULL) AS predict_delay_minutes

@@ -1,7 +1,8 @@
-import { Wind, Thermometer, Eye, Cloud, Droplets, Compass } from 'lucide-react';
+import { Wind, Thermometer, Eye, Cloud, Droplets, Compass, CloudRain } from 'lucide-react';
 import type { WeatherMETAR } from '@/types/weather';
 import { formatDateTime } from '@/lib/utils/formatTime';
 import { formatCloudCover } from '@/lib/utils/cloudCover';
+import { extractRainFromMetar } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 
 const AIRPORT_NAMES: Record<string, string> = {
@@ -17,11 +18,63 @@ function VisibilityIndicator({ miles }: { miles: number | null }) {
   return <span className={`font-semibold ${color}`}>{miles} mi</span>;
 }
 
+function getRainDisplay(rawMetar: string | null | undefined) {
+  const rain = extractRainFromMetar(rawMetar);
+  const intensityLabel =
+    rain.intensityPrefix === '+'
+      ? 'lớn'
+      : rain.intensityPrefix === '-'
+        ? 'nhỏ'
+        : 'vừa';
+
+  if (!rain.hasRain) {
+    return {
+      label: 'Không mưa',
+      iconClassName: 'text-gray-400',
+    };
+  }
+
+  if (rain.hasFreezingRain) {
+    return {
+      label: `Mưa đông kết ${intensityLabel}`,
+      iconClassName: 'text-cyan-600',
+    };
+  }
+
+  if (rain.hasThunderstormRain) {
+    return {
+      label: `Dông mưa ${intensityLabel}`,
+      iconClassName: 'text-red-500',
+    };
+  }
+
+  if (rain.hasShower) {
+    return {
+      label: `Mưa rào ${intensityLabel}`,
+      iconClassName: 'text-blue-500',
+    };
+  }
+
+  if (rain.hasDrizzle) {
+    return {
+      label: `Mưa phùn ${intensityLabel}`,
+      iconClassName: 'text-sky-500',
+    };
+  }
+
+  return {
+    label: `Mưa ${intensityLabel}`,
+    iconClassName: 'text-sky-500',
+  };
+}
+
 interface WeatherCardProps {
   weather: WeatherMETAR;
 }
 
 export function WeatherCard({ weather }: WeatherCardProps) {
+  const rain = getRainDisplay(weather.raw_metar);
+
   return (
     <Card className="h-full">
       <CardContent className="space-y-3">
@@ -83,6 +136,13 @@ export function WeatherCard({ weather }: WeatherCardProps) {
               <p className="text-xs font-medium truncate" title={weather.cloud_cover ?? ''}>
                 {formatCloudCover(weather.cloud_cover)}
               </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <CloudRain className={`w-4 h-4 ${rain.iconClassName}`} />
+            <div>
+              <p className="text-xs text-gray-400">Mưa</p>
+              <p className="text-sm font-medium">{rain.label}</p>
             </div>
           </div>
         </div>
