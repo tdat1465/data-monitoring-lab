@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { Flight } from '@/types/flight';
 import type { WeatherMETAR } from '@/types/weather';
@@ -17,6 +17,16 @@ export function StatsClient({ flights, rawWeatherHistory, serverDateRange }: {
 
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    // Tự động refresh lại data mỗi 15 phút (900,000 ms)
+    // router.refresh() sẽ trigger re-render Server Component (page.tsx) để lấy data mới
+    const intervalId = setInterval(() => {
+      router.refresh();
+    }, 20 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [router]);
 
   const handleDateFilter = (newRange: { start: string, end: string }) => {
     const params = new URLSearchParams();
