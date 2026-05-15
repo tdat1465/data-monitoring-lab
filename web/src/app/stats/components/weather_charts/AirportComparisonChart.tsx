@@ -31,12 +31,12 @@ export function AirportComparisonChart({ rawWeatherHistory = [] }: any) {
 
       return {
         time: timeLabel,
-        'Nhiệt độ NB (°C)': row.VVNB !== undefined ? row.VVNB : null, 
-        'Nhiệt độ ĐN (°C)': row.VVDN !== undefined ? row.VVDN : null,
-        'Nhiệt độ TSN (°C)': row.VVTS !== undefined ? row.VVTS : null,
-        'Delay NB (%)': row.Delay_NB !== undefined ? row.Delay_NB : null,
-        'Delay ĐN (%)': row.Delay_DN !== undefined ? row.Delay_DN : null,
-        'Delay TSN (%)': row.Delay_TSN !== undefined ? row.Delay_TSN : null,
+        'Nội Bài (°C)': row.VVNB !== undefined ? row.VVNB : null, 
+        'Đà Nẵng (°C)': row.VVDN !== undefined ? row.VVDN : null,
+        'Tân Sơn Nhất (°C)': row.VVTS !== undefined ? row.VVTS : null,
+        'Nội Bài (%)': row.Delay_NB !== undefined ? row.Delay_NB : null,
+        'Đà Nẵng (%)': row.Delay_DN !== undefined ? row.Delay_DN : null,
+        'Tân Sơn Nhất (%)': row.Delay_TSN !== undefined ? row.Delay_TSN : null,
       };
     });
   }, [rawWeatherHistory]);
@@ -63,9 +63,9 @@ export function AirportComparisonChart({ rawWeatherHistory = [] }: any) {
               <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
               <Legend verticalAlign="top" height={30} wrapperStyle={{ fontSize: '12px' }}/>
               
-              <Line type="monotone" dataKey="Nhiệt độ NB (°C)" stroke={colors.NB} strokeWidth={2} dot={false} connectNulls={true} />
-              <Line type="monotone" dataKey="Nhiệt độ ĐN (°C)" stroke={colors.DN} strokeWidth={2} dot={false} connectNulls={true} />
-              <Line type="monotone" dataKey="Nhiệt độ TSN (°C)" stroke={colors.TSN} strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Nội Bài (°C)" stroke={colors.NB} strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Đà Nẵng (°C)" stroke={colors.DN} strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Tân Sơn Nhất (°C)" stroke={colors.TSN} strokeWidth={2} dot={false} connectNulls={true} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -84,9 +84,9 @@ export function AirportComparisonChart({ rawWeatherHistory = [] }: any) {
               <Legend verticalAlign="top" height={30} wrapperStyle={{ fontSize: '12px' }}/>
               
               {/* Dùng nét đứt (strokeDasharray) hoặc AreaChart tùy bạn, ở đây giữ nguyên nét đứt để khác biệt */}
-              <Line type="monotone" dataKey="Delay NB (%)" stroke={colors.NB} strokeDasharray="3 3" strokeWidth={2} dot={false} connectNulls={true} />
-              <Line type="monotone" dataKey="Delay ĐN (%)" stroke={colors.DN} strokeDasharray="3 3" strokeWidth={2} dot={false} connectNulls={true} />
-              <Line type="monotone" dataKey="Delay TSN (%)" stroke={colors.TSN} strokeDasharray="3 3" strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Nội Bài (%)" stroke={colors.NB} strokeDasharray="3 3" strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Đà Nẵng (%)" stroke={colors.DN} strokeDasharray="3 3" strokeWidth={2} dot={false} connectNulls={true} />
+              <Line type="monotone" dataKey="Tân Sơn Nhất (%)" stroke={colors.TSN} strokeDasharray="3 3" strokeWidth={2} dot={false} connectNulls={true} />
             </LineChart>
           </ResponsiveContainer>
         </div>
