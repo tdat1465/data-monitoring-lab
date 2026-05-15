@@ -3,6 +3,7 @@ import sys
 import pandas as pd
 from pathlib import Path
 import joblib
+import sklearn
 
 def find_project_dir() -> Path:
     candidates = [
@@ -43,10 +44,11 @@ project_dir = find_project_dir()
 load_env_file(project_dir.parent / ".env")
 
 from db_utils import load_table, save_dataframe
-from processing import ensure_table_has_columns
+from processing import FEATURE_COLS, ensure_table_has_columns
 
 def run_inference():
     print("Loading current snapshot data...")
+    print(f"scikit-learn version: {sklearn.__version__}")
     try:
         flights_current = load_table("flights_current_snapshot")
     except Exception as e:
@@ -69,14 +71,14 @@ def run_inference():
 
     # Ensure correct types for numeric columns that might have been loaded as string
     numeric_cols = [
-        "temperature_c", "dew_point_c", "wind_direction_deg", "wind_speed_kt", 
-        "visibility_miles", "scheduled_hour", "scheduled_dayofweek", "scheduled_month", 
-        "minutes_to_departure_at_snapshot", "temp_dew_spread", "is_low_visibility", 
+        "temperature_c", "dew_point_c", "wind_direction_deg", "wind_speed_kt",
+        "visibility_miles", "scheduled_hour", "scheduled_dayofweek", "scheduled_month",
+        "minutes_to_departure_at_snapshot", "temp_dew_spread", "is_low_visibility",
         "is_wind_variable", "is_estimated_missing", "flight_num_only",
         "is_high_wind", "fog_risk", "cloud_severity",
         "weather_severity_index", "airport_hourly_congestion", "is_rush_hour",
         "is_trunk_route",
-        "route_delay_rate", "airline_historical_delay_rate", 
+        "route_delay_rate", "airline_historical_delay_rate",
         "airport_congestion_2h", "rolling_delay_rate_2h",
         "sin_hour", "cos_hour"
     ]
@@ -135,13 +137,13 @@ def run_inference():
             print("Model artifact is not a valid model object.")
         return
 
-    if feature_cols:
-        missing_cols = [c for c in feature_cols if c not in df_to_predict.columns]
-        for col in missing_cols:
-            df_to_predict[col] = pd.NA
-        predict_frame = df_to_predict[feature_cols].copy()
-    else:
-        predict_frame = df_to_predict
+    if not feature_cols:
+        feature_cols = FEATURE_COLS
+
+    missing_cols = [c for c in feature_cols if c not in df_to_predict.columns]
+    for col in missing_cols:
+        df_to_predict[col] = pd.NA
+    predict_frame = df_to_predict[feature_cols].copy()
 
     try:
         if is_two_stage:
@@ -151,6 +153,15 @@ def run_inference():
             predictions = np.where(prob >= threshold, reg_pred, 0.0)
         else:
             predictions = model.predict(predict_frame)
+    except AttributeError as e:
+        if "_name_to_fitted_passthrough" in str(e):
+            print(
+                "Model/serving scikit-learn versions are incompatible. "
+                "Please use scikit-learn==1.4.1.post1 (same as training notebook artifact)."
+            )
+            return
+        print(f"Error during model prediction: {e}")
+        return
     except Exception as e:
         print(f"Error during model prediction: {e}")
         return
