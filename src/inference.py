@@ -77,7 +77,8 @@ def run_inference():
         "weather_severity_index", "airport_hourly_congestion", "is_rush_hour",
         "is_trunk_route",
         "route_delay_rate", "airline_historical_delay_rate", 
-        "airport_congestion_2h", "rolling_delay_rate_2h"
+        "airport_congestion_2h", "rolling_delay_rate_2h",
+        "sin_hour", "cos_hour"
     ]
     for col in numeric_cols:
         if col in df_to_predict.columns:

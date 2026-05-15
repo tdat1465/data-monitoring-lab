@@ -276,26 +276,26 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_operational_features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
 
-    def _congestion(g: pd.DataFrame) -> pd.DataFrame:
+    def _congestion(g: pd.DataFrame) -> pd.Series:
         g = g.sort_values("scheduled_dt")
         if g["scheduled_dt"].notna().any():
             s = g.set_index("scheduled_dt")
-            g["airport_congestion_2h"] = s["flight_key"].rolling("2h", center=True).count().values
+            vals = s["flight_key"].rolling("2h", center=True).count().values
         else:
-            g["airport_congestion_2h"] = np.nan
-        return g
+            vals = np.nan
+        return pd.Series(vals, index=g.index)
 
-    def _rolling_delay(g: pd.DataFrame) -> pd.DataFrame:
+    def _rolling_delay(g: pd.DataFrame) -> pd.Series:
         g = g.sort_values("retrieved_at_vn")
         if g["retrieved_at_vn"].notna().any():
             s = g.set_index("retrieved_at_vn")
-            g["rolling_delay_rate_2h"] = s["label_delay"].rolling("2h", closed="left").mean().values
+            vals = s["label_delay"].rolling("2h", closed="left").mean().values
         else:
-            g["rolling_delay_rate_2h"] = np.nan
-        return g
+            vals = np.nan
+        return pd.Series(vals, index=g.index)
 
-    out = out.groupby("source_airport", group_keys=False).apply(_congestion)
-    out = out.groupby("source_airport", group_keys=False).apply(_rolling_delay)
+    out["airport_congestion_2h"] = out.groupby("source_airport", group_keys=False).apply(_congestion)
+    out["rolling_delay_rate_2h"] = out.groupby("source_airport", group_keys=False).apply(_rolling_delay)
     return out
 
 def add_target_encodings(train_df: pd.DataFrame, apply_df: pd.DataFrame) -> pd.DataFrame:
