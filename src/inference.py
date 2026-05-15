@@ -43,7 +43,7 @@ project_dir = find_project_dir()
 load_env_file(project_dir.parent / ".env")
 
 from db_utils import load_table, save_dataframe
-from processing import ensure_table_has_columns
+from processing import FEATURE_COLS, ensure_table_has_columns
 
 def run_inference():
     print("Loading current snapshot data...")
@@ -100,40 +100,6 @@ def run_inference():
     is_two_stage = False
     model = None
     feature_cols = None
-    training_feature_cols = [
-        "scheduled_hour",
-        "sin_hour",
-        "cos_hour",
-        "scheduled_dayofweek",
-        "scheduled_month",
-        "minutes_to_departure_at_snapshot",
-        "source_airport",
-        "direction",
-        "route_airport_std",
-        "flight_number",
-        "airline_code",
-        "flight_num_only",
-        "is_estimated_missing",
-        "dew_point_c",
-        "wind_direction_deg",
-        "wind_speed_kt",
-        "visibility_miles",
-        "visibility_bin",
-        "cloud_cover",
-        "cloud_severity",
-        "temp_dew_spread",
-        "is_high_wind",
-        "fog_risk",
-        "weather_severity_index",
-        "is_wind_variable",
-        "airport_hourly_congestion",
-        "is_rush_hour",
-        "is_trunk_route",
-        "route_delay_rate",
-        "airline_historical_delay_rate",
-        "airport_congestion_2h",
-        "rolling_delay_rate_2h",
-    ]
 
     if isinstance(artifact, dict):
         if "classifier" in artifact and "regressor" in artifact:
@@ -170,7 +136,7 @@ def run_inference():
         return
 
     if not feature_cols:
-        feature_cols = training_feature_cols
+        feature_cols = FEATURE_COLS
 
     missing_cols = [c for c in feature_cols if c not in df_to_predict.columns]
     for col in missing_cols:

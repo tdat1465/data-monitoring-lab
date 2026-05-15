@@ -47,6 +47,40 @@ from db_utils import load_table, save_dataframe
 
 DELAY_THRESHOLD_MINUTES = 15
 TRAINING_SNAPSHOT_LEAD_MINUTES = 30
+FEATURE_COLS = [
+    "scheduled_hour",
+    "sin_hour",
+    "cos_hour",
+    "scheduled_dayofweek",
+    "scheduled_month",
+    "minutes_to_departure_at_snapshot",
+    "source_airport",
+    "direction",
+    "route_airport_std",
+    "flight_number",
+    "airline_code",
+    "flight_num_only",
+    "is_estimated_missing",
+    "dew_point_c",
+    "wind_direction_deg",
+    "wind_speed_kt",
+    "visibility_miles",
+    "visibility_bin",
+    "cloud_cover",
+    "cloud_severity",
+    "temp_dew_spread",
+    "is_high_wind",
+    "fog_risk",
+    "weather_severity_index",
+    "is_wind_variable",
+    "airport_hourly_congestion",
+    "is_rush_hour",
+    "is_trunk_route",
+    "route_delay_rate",
+    "airline_historical_delay_rate",
+    "airport_congestion_2h",
+    "rolling_delay_rate_2h",
+]
 
 def normalize_space(x):
     if pd.isna(x):
@@ -310,26 +344,37 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_operational_features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
 
-    def _congestion(g: pd.DataFrame) -> pd.Series:
+    if "flight_key" not in out.columns:
+        key_cols = ["source_airport", "direction", "route_airport_std", "flight_number", "scheduled_dt"]
+        if all(c in out.columns for c in key_cols):
+            out["flight_key"] = out[key_cols].astype(str).agg("|".join, axis=1)
+
+    def _congestion(g: pd.DataFrame) -> pd.DataFrame:
         g = g.sort_values("scheduled_dt")
         if g["scheduled_dt"].notna().any():
             s = g.set_index("scheduled_dt")
-            vals = s["flight_key"].rolling("2h", center=True).count().values
+            if "flight_key" in s.columns:
+                g["airport_congestion_2h"] = s["flight_key"].rolling("2h", center=True).count().values
+            else:
+                g["airport_congestion_2h"] = pd.Series(1, index=s.index).rolling("2h", center=True).count().values
         else:
-            vals = np.nan
-        return pd.Series(vals, index=g.index)
+            g["airport_congestion_2h"] = np.nan
+        return g
 
-    def _rolling_delay(g: pd.DataFrame) -> pd.Series:
+    def _rolling_delay(g: pd.DataFrame) -> pd.DataFrame:
         g = g.sort_values("retrieved_at_vn")
         if g["retrieved_at_vn"].notna().any():
             s = g.set_index("retrieved_at_vn")
-            vals = s["label_delay"].rolling("2h", closed="left").mean().values
+            if "label_delay" in s.columns:
+                g["rolling_delay_rate_2h"] = s["label_delay"].rolling("2h", closed="left").mean().values
+            else:
+                g["rolling_delay_rate_2h"] = np.nan
         else:
-            vals = np.nan
-        return pd.Series(vals, index=g.index)
+            g["rolling_delay_rate_2h"] = np.nan
+        return g
 
-    out["airport_congestion_2h"] = out.groupby("source_airport", group_keys=False).apply(_congestion)
-    out["rolling_delay_rate_2h"] = out.groupby("source_airport", group_keys=False).apply(_rolling_delay)
+    out = out.groupby("source_airport", group_keys=False).apply(_congestion)
+    out = out.groupby("source_airport", group_keys=False).apply(_rolling_delay)
     return out
 
 def add_target_encodings(train_df: pd.DataFrame, apply_df: pd.DataFrame) -> pd.DataFrame:
@@ -539,6 +584,20 @@ def process_data():
             "raw_metar": "raw_metar",
         },
     ).copy()
+    for col in [
+        "icao_code",
+        "report_time_utc",
+        "report_time_vn",
+        "temperature_c",
+        "dew_point_c",
+        "wind_direction_deg",
+        "wind_speed_kt",
+        "visibility_miles",
+        "cloud_cover",
+        "raw_metar",
+    ]:
+        if col not in weather.columns:
+            weather[col] = np.nan
 
     icao_map = {
         "VVNB": "NB",
@@ -561,7 +620,10 @@ def process_data():
 
     weather["wind_direction_deg"] = weather["wind_direction_deg"].replace({"VRB": np.nan})
     weather["wind_direction_deg"] = pd.to_numeric(weather["wind_direction_deg"], errors="coerce")
-    weather["is_wind_variable"] = weather_raw["wind_direction_deg"].astype(str).eq("VRB").astype(int)
+    if "wind_direction_deg" in weather_raw.columns:
+        weather["is_wind_variable"] = weather_raw["wind_direction_deg"].astype(str).eq("VRB").astype(int)
+    else:
+        weather["is_wind_variable"] = 0
 
     weather = weather.dropna(subset=["source_airport", "report_time_vn"]).sort_values(["source_airport", "report_time_vn"])
     weather = weather.drop_duplicates(subset=["source_airport", "report_time_vn", "raw_metar"], keep="last")
