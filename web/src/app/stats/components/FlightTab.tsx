@@ -333,6 +333,7 @@ export function FlightTab({
 
     const airlinePerf = Object.entries(airlineAgg)
       .map(([k, v]) => ({ airline: k, delayRate: (v.delayed / v.flights) * 100, flights: v.flights }))
+      .filter((a) => a.flights >= 10)
       .sort((a, b) => b.delayRate - a.delayRate);
 
     // Heatmap Logic
@@ -381,6 +382,7 @@ export function FlightTab({
 
     const routePerf = Object.entries(routeAgg)
       .map(([route, v]) => ({ route, delayRate: (v.delayed / v.flights) * 100, flights: v.flights }))
+      .filter((r) => r.flights >= 10)
       .sort((a, b) => b.delayRate - a.delayRate)
       .slice(0, 20);
 
