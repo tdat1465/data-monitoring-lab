@@ -194,6 +194,40 @@ def merge_weather_asof(flight_df: pd.DataFrame, weather_df: pd.DataFrame, tolera
          return left.copy()
     return pd.concat(merged_parts, ignore_index=True)
 
+def impute_weather(
+    df: pd.DataFrame,
+    tolerance: pd.Timedelta,
+) -> pd.DataFrame:
+    out = df.sort_values(["source_airport", "retrieved_at_vn"]).copy()
+    wx_cols = [
+        "temperature_c",
+        "dew_point_c",
+        "wind_direction_deg",
+        "wind_speed_kt",
+        "visibility_miles",
+        "cloud_cover",
+        "is_wind_variable",
+        "raw_metar",
+        "report_time_vn",
+    ]
+    max_age = tolerance.total_seconds() / 60.0
+
+    out[wx_cols] = out.groupby("source_airport")[wx_cols].ffill()
+    out["weather_age_minutes"] = (
+        (out["retrieved_at_vn"] - out["report_time_vn"]).dt.total_seconds() / 60.0
+    )
+    stale_mask = out["weather_age_minutes"].gt(max_age)
+    out.loc[stale_mask, wx_cols] = np.nan
+    out.loc[stale_mask, "weather_age_minutes"] = np.nan
+
+    num_cols = ["temperature_c", "dew_point_c", "wind_speed_kt", "visibility_miles"]
+    for c in num_cols:
+        if c in out.columns:
+            med = out.groupby("source_airport")[c].transform("median")
+            out[c] = out[c].fillna(med)
+
+    return out
+
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
 
@@ -488,6 +522,8 @@ def process_data():
         .apply(pick_training_snapshot)
         .reset_index(drop=True)
     )
+    if "flight_key" not in flights_training_snapshot.columns:
+        flights_training_snapshot["flight_key"] = flights_training_snapshot[key_cols].astype(str).agg("|".join, axis=1)
 
     weather = weather_raw.rename(
         columns={
@@ -530,8 +566,12 @@ def process_data():
     weather = weather.dropna(subset=["source_airport", "report_time_vn"]).sort_values(["source_airport", "report_time_vn"])
     weather = weather.drop_duplicates(subset=["source_airport", "report_time_vn", "raw_metar"], keep="last")
 
-    current_with_weather = merge_weather_asof(flights_current, weather)
-    train_with_weather = merge_weather_asof(flights_training_snapshot, weather)
+    WX_TOLERANCE = pd.Timedelta(hours=3)
+    current_with_weather = merge_weather_asof(flights_current, weather, tolerance=WX_TOLERANCE)
+    train_with_weather = merge_weather_asof(flights_training_snapshot, weather, tolerance=WX_TOLERANCE)
+
+    current_with_weather = impute_weather(current_with_weather, tolerance=WX_TOLERANCE)
+    train_with_weather = impute_weather(train_with_weather, tolerance=WX_TOLERANCE)
 
     current_features = add_features(current_with_weather)
     training_features = add_features(train_with_weather)
@@ -546,7 +586,7 @@ def process_data():
     training_dataset = training_features[training_features["label_delay"].isin([0, 1])].copy()
     training_dataset["label_delay"] = training_dataset["label_delay"].astype(int)
 
-    training_dataset = training_dataset[training_dataset["minutes_to_departure_at_snapshot"] >= 0].copy()
+    # training_dataset = training_dataset[training_dataset["minutes_to_departure_at_snapshot"] >= 0].copy()
 
     training_dataset_to_save = training_dataset.copy()
     if "flight_key" not in training_dataset_to_save.columns:
