@@ -97,7 +97,7 @@ export async function getWeatherHistory(startDate?: string, endDate?: string): P
       cloud_cover,
       raw_metar
     FROM weather_metar
-    WHERE DATE(report_time_vn AT TIME ZONE '+07:00') BETWEEN ${startStr}::date AND ${endStr}::date
+    WHERE DATE(report_time_vn::timestamp AT TIME ZONE '+07:00') BETWEEN ${startStr}::date AND ${endStr}::date
     ORDER BY report_time_vn ASC
   `;
   const result = await query(sql);
