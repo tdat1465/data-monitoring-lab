@@ -63,10 +63,6 @@ export function OverviewTab({
     });
   }, [rawWeatherHistory, appliedDateRange]);
 
-  if (!rawWeatherHistory || rawWeatherHistory.length === 0) {
-    return <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-xl">Đang tải dữ liệu thời tiết...</div>;
-  }
-
   const handleClearFilter = () => {
     const defaultRange = getInitialDates();
     setInputDateRange(defaultRange);
@@ -103,8 +99,24 @@ export function OverviewTab({
   };
 
   if (!rawWeatherHistory || rawWeatherHistory.length === 0) {
-    return <div className="p-8 text-center text-gray-500">Đang chuẩn bị dữ liệu tổng quan...</div>;
+    return (
+      <div className="space-y-6">
+        <DateFilterBar
+          inputDateRange={inputDateRange}
+          setInputDateRange={setInputDateRange}
+          resolution={resolution}
+          setResolution={setResolution}
+          onApply={handleApplyFilter}
+          onClear={handleClearFilter}
+          onToday={handleToday}
+          selectedAirport={selectedAirport}
+          onAirportChange={setSelectedAirport}
+        />
+        <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-xl">Đang tải dữ liệu tổng quan...</div>
+      </div>
+    );
   }
+
   // thêm trường hợp delay_minutes >= 15 để khớp với logic của FlightTab
   const getDelayFlag = (flight: Flight) => Number(flight.label_delay ?? 0) === 1 ||
     Number(flight.delay_minutes ?? 0) >= 15;

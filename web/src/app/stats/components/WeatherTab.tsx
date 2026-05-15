@@ -302,20 +302,22 @@ export function WeatherTab({
   };
 
   if (rawWeatherHistory.length === 0) {
-
-    <DateFilterBar
-        inputDateRange={inputDateRange}
-        setInputDateRange={setInputDateRange}
-        resolution={resolution}
-        setResolution={setResolution}
-        onApply={handleApplyFilter}
-        onClear={handleClearFilter}
-        onToday={handleToday}
-        selectedAirport={selectedAirport}
-        onAirportChange={setSelectedAirport}
-      />
-
-    return <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-xl">Dang tai du lieu thoi tiet...</div>;
+    return (
+      <div className="space-y-6">
+        <DateFilterBar
+          inputDateRange={inputDateRange}
+          setInputDateRange={setInputDateRange}
+          resolution={resolution}
+          setResolution={setResolution}
+          onApply={handleApplyFilter}
+          onClear={handleClearFilter}
+          onToday={handleToday}
+          selectedAirport={selectedAirport}
+          onAirportChange={setSelectedAirport}
+        />
+        <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-xl">Đang tải dữ liệu thời tiết...</div>
+      </div>
+    );
   }
 
   return (
