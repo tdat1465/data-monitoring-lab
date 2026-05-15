@@ -343,50 +343,35 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_operational_features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-
-    def _ensure_source_airport_column(frame: pd.DataFrame) -> pd.DataFrame:
-        if "source_airport" in frame.columns:
-            return frame
-        if "source_airport" in frame.index.names:
-            frame = frame.reset_index()
-            # If reset_index creates duplicate names, keep one source_airport column.
-            frame = frame.loc[:, ~frame.columns.duplicated()]
-        return frame
+    if "source_airport" not in out.columns:
+        raise ValueError("Missing required column: source_airport")
 
     if "flight_key" not in out.columns:
         key_cols = ["source_airport", "direction", "route_airport_std", "flight_number", "scheduled_dt"]
         if all(c in out.columns for c in key_cols):
             out["flight_key"] = out[key_cols].astype(str).agg("|".join, axis=1)
 
-    def _congestion(g: pd.DataFrame) -> pd.DataFrame:
-        g = g.sort_values("scheduled_dt")
-        if g["scheduled_dt"].notna().any():
-            s = g.set_index("scheduled_dt")
-            if "flight_key" in s.columns:
-                g["airport_congestion_2h"] = s["flight_key"].rolling("2h", center=True).count().values
-            else:
-                g["airport_congestion_2h"] = pd.Series(1, index=s.index).rolling("2h", center=True).count().values
-        else:
-            g["airport_congestion_2h"] = np.nan
-        return g
+    out["airport_congestion_2h"] = np.nan
+    out["rolling_delay_rate_2h"] = np.nan
 
-    def _rolling_delay(g: pd.DataFrame) -> pd.DataFrame:
-        g = g.sort_values("retrieved_at_vn")
-        if g["retrieved_at_vn"].notna().any():
-            s = g.set_index("retrieved_at_vn")
-            if "label_delay" in s.columns:
-                g["rolling_delay_rate_2h"] = s["label_delay"].rolling("2h", closed="left").mean().values
-            else:
-                g["rolling_delay_rate_2h"] = np.nan
-        else:
-            g["rolling_delay_rate_2h"] = np.nan
-        return g
+    for _, idx in out.groupby("source_airport", sort=False).groups.items():
+        g = out.loc[idx].copy()
 
-    out = _ensure_source_airport_column(out)
-    out = out.groupby("source_airport", group_keys=False).apply(_congestion)
-    out = _ensure_source_airport_column(out)
-    out = out.groupby("source_airport", group_keys=False).apply(_rolling_delay)
-    out = _ensure_source_airport_column(out)
+        g_cong = g.sort_values("scheduled_dt")
+        if g_cong["scheduled_dt"].notna().any():
+            s_cong = g_cong.set_index("scheduled_dt")
+            if "flight_key" in s_cong.columns:
+                cong_vals = s_cong["flight_key"].rolling("2h", center=True).count().values
+            else:
+                cong_vals = pd.Series(1, index=s_cong.index).rolling("2h", center=True).count().values
+            out.loc[g_cong.index, "airport_congestion_2h"] = cong_vals
+
+        g_roll = g.sort_values("retrieved_at_vn")
+        if g_roll["retrieved_at_vn"].notna().any() and "label_delay" in g_roll.columns:
+            s_roll = g_roll.set_index("retrieved_at_vn")
+            roll_vals = s_roll["label_delay"].rolling("2h", closed="left").mean().values
+            out.loc[g_roll.index, "rolling_delay_rate_2h"] = roll_vals
+
     return out
 
 def add_target_encodings(train_df: pd.DataFrame, apply_df: pd.DataFrame) -> pd.DataFrame:
