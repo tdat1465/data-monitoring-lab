@@ -2,10 +2,11 @@ import { query } from '@/lib/db';
 import type { WeatherMETAR } from '@/types/weather';
 
 export async function getLatestWeather(): Promise<WeatherMETAR[]> {
+  // Nối '+07:00' để JavaScript parse đúng giờ Việt Nam
   const sql = `
     SELECT DISTINCT ON (icao_code)
       icao_code,
-      report_time_vn::timestamptz AT TIME ZONE '+07:00' AS report_time_vn,
+      (report_time_vn::text || '+07:00') AS report_time_vn,
       temperature_c,
       dew_point_c,
       wind_direction_deg,
@@ -81,10 +82,13 @@ export async function getWeatherHistory(startDate?: string, endDate?: string): P
 
   console.log(`Range: ${startDate} - ${endDate}`);
 
+  // report_time_vn lưu dạng local datetime (không có timezone info)
+  // Cần nối '+07:00' để JavaScript hiểu đây là giờ Việt Nam và parse đúng
+  // Dùng AT TIME ZONE trong WHERE để filter theo múi giờ VN (tránh lệch ngày do UTC)
   const sql = `
     SELECT
       icao_code,
-      report_time_vn,
+      (report_time_vn::text || '+07:00') AS report_time_vn,
       temperature_c,
       dew_point_c,
       wind_direction_deg,
@@ -93,7 +97,7 @@ export async function getWeatherHistory(startDate?: string, endDate?: string): P
       cloud_cover,
       raw_metar
     FROM weather_metar
-    WHERE DATE(report_time_vn) BETWEEN ${startStr}::date AND ${endStr}::date
+    WHERE DATE(report_time_vn AT TIME ZONE '+07:00') BETWEEN ${startStr}::date AND ${endStr}::date
     ORDER BY report_time_vn ASC
   `;
   const result = await query(sql);
