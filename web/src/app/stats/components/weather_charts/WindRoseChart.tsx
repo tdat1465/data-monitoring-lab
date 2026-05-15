@@ -154,13 +154,17 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
 
             <Tooltip
               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-              formatter={(value: any, name: string, props: any) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              formatter={(value: any, name: any, props: any) => {
                 const payload = props.payload;
                 if (name === 'Số bản tin') {
-                  return [`${payload.tanSuatRaw} bản tin (${value}%)`, name];
+                  return [`${payload.freqRaw} tin (${value}%)`, name];
                 }
                 if (name === 'Gió mạnh (>=12kt)') {
-                  return [`${payload.gioManhRaw} bản tin (${value}%)`, name];
+                  return [`${payload.strongWindRaw} tin (${value}%)`, name];
+                }
+                if (name === 'Tỉ lệ trễ (%)') {
+                  return [`${payload.delayRateRaw}%`, name];
                 }
                 return [`${value}%`, name];
               }}
