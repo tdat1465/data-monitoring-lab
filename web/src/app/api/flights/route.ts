@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFlightsWithPredictions } from '@/lib/queries/getFlights';
+import { getVietnamDateString } from '@/lib/utils';
 
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
-  const date = searchParams.get('date') ?? new Date().toISOString().split('T')[0];
+  const date = searchParams.get('date') ?? getVietnamDateString();
   const source = searchParams.get('source');
   const direction = searchParams.get('direction');
   const search = searchParams.get('search');

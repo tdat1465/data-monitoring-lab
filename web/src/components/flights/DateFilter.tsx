@@ -3,19 +3,20 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { Calendar } from 'lucide-react';
+import { getVietnamDateString } from '@/lib/utils';
 
 export function DateFilter() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    return searchParams.get('date') ?? new Date().toISOString().split('T')[0];
+    return searchParams.get('date') ?? getVietnamDateString();
   });
 
   useEffect(() => {
     const currentParam = searchParams.get('date');
     if (currentParam !== selectedDate) {
       const params = new URLSearchParams(searchParams.toString());
-      if (selectedDate === new Date().toISOString().split('T')[0]) {
+      if (selectedDate === getVietnamDateString()) {
         params.delete('date');
       } else {
         params.set('date', selectedDate);
@@ -24,7 +25,7 @@ export function DateFilter() {
     }
   }, [selectedDate, searchParams, router]);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getVietnamDateString();
   const isToday = selectedDate === today;
 
   return (
