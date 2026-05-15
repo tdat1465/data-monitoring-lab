@@ -3,6 +3,7 @@ import sys
 import pandas as pd
 from pathlib import Path
 import joblib
+import sklearn
 
 def find_project_dir() -> Path:
     candidates = [
@@ -47,6 +48,7 @@ from processing import FEATURE_COLS, ensure_table_has_columns
 
 def run_inference():
     print("Loading current snapshot data...")
+    print(f"scikit-learn version: {sklearn.__version__}")
     try:
         flights_current = load_table("flights_current_snapshot")
     except Exception as e:
@@ -151,6 +153,15 @@ def run_inference():
             predictions = np.where(prob >= threshold, reg_pred, 0.0)
         else:
             predictions = model.predict(predict_frame)
+    except AttributeError as e:
+        if "_name_to_fitted_passthrough" in str(e):
+            print(
+                "Model/serving scikit-learn versions are incompatible. "
+                "Please use scikit-learn==1.4.1.post1 (same as training notebook artifact)."
+            )
+            return
+        print(f"Error during model prediction: {e}")
+        return
     except Exception as e:
         print(f"Error during model prediction: {e}")
         return
