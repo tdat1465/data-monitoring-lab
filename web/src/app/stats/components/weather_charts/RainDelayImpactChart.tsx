@@ -106,7 +106,7 @@ export function RainDelayImpactChart({ flights = [], selectedAirport }: Props) {
             <Tooltip content={<RainImpactTooltip />} />
             <Bar dataKey="delayRate" radius={[6, 6, 0, 0]} barSize={72} minPointSize={4}>
               {chartData.map((entry) => (
-                <Cell key={entry.condition} fill={entry.condition === 'Có mưa' ? '#2563eb' : '#9ca3af'} fillOpacity={0.85} />
+                <Cell key={entry.condition} fill={entry.condition === 'Có mưa' ? '#f2cc8f' : '#9ca3af'} fillOpacity={0.85} />
               ))}
               <LabelList dataKey="delayRate" position="top" style={{ fontSize: '12px', fill: '#374151' }} formatter={(value: unknown) => `${value}%`} />
             </Bar>

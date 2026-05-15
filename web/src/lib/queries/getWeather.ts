@@ -81,6 +81,7 @@ export async function getWeatherHistory(startDate?: string, endDate?: string): P
   const endStr = endDate ? `'${endDate}'` : "NOW()::date::text";
 
   console.log(`Range: ${startDate} - ${endDate}`);
+  console.log(`Range: ${startStr} - ${endStr}`);
 
   // report_time_vn lưu dạng local datetime (không có timezone info)
   // Cần nối '+07:00' để JavaScript hiểu đây là giờ Việt Nam và parse đúng
@@ -88,7 +89,7 @@ export async function getWeatherHistory(startDate?: string, endDate?: string): P
   const sql = `
     SELECT
       icao_code,
-      (report_time_vn::text || '+07:00') AS report_time_vn,
+      report_time_vn AS report_time_vn,
       temperature_c,
       dew_point_c,
       wind_direction_deg,
@@ -97,7 +98,7 @@ export async function getWeatherHistory(startDate?: string, endDate?: string): P
       cloud_cover,
       raw_metar
     FROM weather_metar
-    WHERE DATE(report_time_vn::timestamp AT TIME ZONE '+07:00') BETWEEN ${startStr}::date AND ${endStr}::date
+    WHERE DATE(report_time_vn) BETWEEN ${startStr}::date AND ${endStr}::date
     ORDER BY report_time_vn ASC
   `;
   const result = await query(sql);

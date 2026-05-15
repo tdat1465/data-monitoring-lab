@@ -22,7 +22,7 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
     const counts = directions.map(d => ({
       subject: d.angle,
       'Tần suất': 0,
-      'Gió mạnh (>15kt)': 0,
+      'Gió mạnh (>=12kt)': 0,
       'Tỉ lệ trễ (%)': 0,
       delayedFlightsCount: 0,
       totalFlightsInDir: 0,
@@ -63,7 +63,7 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
 
         if (isMatch) {
           counts[index]['Tần suất'] += 1;
-          if (speed > 15) counts[index]['Gió mạnh (>15kt)'] += 1;
+          if (speed >= 12) counts[index]['Gió mạnh (>=12kt)'] += 1;
         }
       });
     });
@@ -109,8 +109,8 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
     // 4. Tính tỉ lệ phần trăm cuối cùng
     return counts.map(c => ({
       subject: c.subject,
-      'Tần suất': c['Tần suất'] / 10,
-      'Gió mạnh (>15kt)': c['Gió mạnh (>15kt)'],
+      'Tần suất': c['Tần suất'] ,
+      'Gió mạnh (>=12kt)': c['Gió mạnh (>=12kt)'],
       'Tỉ lệ trễ (%)': c.totalFlightsInDir > 0 
         ? Number(((c.delayedFlightsCount / c.totalFlightsInDir) * 100).toFixed(1)) 
         : 0,
@@ -134,7 +134,7 @@ export function WindRoseChart({ rawWeatherHistory = [], flights = [], selectedAi
             <Legend verticalAlign="top" height={36} wrapperStyle={{ cursor: 'pointer' }} />
             
             <Radar name="Số bản tin" dataKey="Tần suất" stroke="#81b29a" fill="#81b29a" fillOpacity={0.3} />
-            <Radar name="Gió mạnh > 15kt" dataKey="Gió mạnh (>15kt)" stroke="#f2cc8f" fill="#f2cc8f" fillOpacity={0.5} />
+            <Radar name="Gió mạnh (>=12kt)" dataKey="Gió mạnh (>=12kt)" stroke="#f2cc8f" fill="#f2cc8f" fillOpacity={0.5} />
             <Radar name="Tỉ lệ trễ (%)" dataKey="Tỉ lệ trễ (%)" stroke="#e07a5f" fill="#e07a5f" fillOpacity={0.6} />
             
             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />

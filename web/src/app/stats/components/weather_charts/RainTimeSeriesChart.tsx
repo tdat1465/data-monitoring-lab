@@ -70,7 +70,7 @@ export function RainTimeSeriesChart({ rawWeatherHistory = [], selectedAirport }:
             <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 12, fill: '#6b7280' }} />
             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
             <Legend verticalAlign="top" height={36} />
-            <Bar yAxisId="left" dataKey={RAIN_RATE_KEY} fill="#3b82f6" fillOpacity={0.35} radius={[4, 4, 0, 0]} barSize={18} />
+            <Bar yAxisId="left" dataKey={RAIN_RATE_KEY} fill="#81b29a" fillOpacity={0.35} radius={[4, 4, 0, 0]} barSize={18} />
             <Line yAxisId="right" type="monotone" dataKey={DELAY_RATE_KEY} stroke="#e07a5f" strokeWidth={2.5} dot={false} connectNulls />
           </ComposedChart>
         </ResponsiveContainer>
