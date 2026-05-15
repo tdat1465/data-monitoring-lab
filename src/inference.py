@@ -89,13 +89,27 @@ def run_inference():
         return
         
     try:
-        model = joblib.load(model_path)
+        artifact = joblib.load(model_path)
     except Exception as e:
         print(f"Failed to load model: {e}")
         return
-        
+
+    model = artifact.get("model") if isinstance(artifact, dict) else artifact
+    feature_cols = artifact.get("feature_cols") if isinstance(artifact, dict) else None
+    if model is None:
+        print("Model artifact is missing 'model'.")
+        return
+
+    if feature_cols:
+        missing_cols = [c for c in feature_cols if c not in df_to_predict.columns]
+        for col in missing_cols:
+            df_to_predict[col] = pd.NA
+        predict_frame = df_to_predict[feature_cols].copy()
+    else:
+        predict_frame = df_to_predict
+
     try:
-        predictions = model.predict(df_to_predict)
+        predictions = model.predict(predict_frame)
     except Exception as e:
         print(f"Error during model prediction: {e}")
         return
