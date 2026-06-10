@@ -6,6 +6,7 @@ import { FlightTable } from '@/components/flights/FlightTable';
 import { DateFilter } from '@/components/flights/DateFilter';
 import { WeatherGrid } from '@/components/weather/WeatherGrid';
 import { StatsWrapper } from '@/app/StatsWrapper';
+import { getVietnamDateString } from '@/lib/utils';
 
 export const revalidate = 300;
 
@@ -15,7 +16,7 @@ interface DashboardPageProps {
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
-  const selectedDate = params.date ?? new Date().toISOString().split('T')[0];
+  const selectedDate = params.date ?? getVietnamDateString();
 
   let flights: Awaited<ReturnType<typeof getFlightsWithPredictions>> = [];
   let weather: Awaited<ReturnType<typeof getLatestWeather>> = [];

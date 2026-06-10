@@ -18,7 +18,13 @@ interface DataPoint {
   Delay_all: number;
 }
 
-export function TempDelayCorrelationChart({ rawWeatherHistory }: { rawWeatherHistory: any[] }) {
+interface Props {
+  rawWeatherHistory: any[];
+  dateRange?: { start: string; end: string };
+  resolution?: string;
+}
+
+export function TempDelayCorrelationChart({ rawWeatherHistory, dateRange, resolution }: Props) {
   const correlationData = useMemo(() => {
     if (!rawWeatherHistory || rawWeatherHistory.length === 0) return [];
 
@@ -47,6 +53,12 @@ export function TempDelayCorrelationChart({ rawWeatherHistory }: { rawWeatherHis
       .sort((a, b) => a.minTemp - b.minTemp);
   }, [rawWeatherHistory]);
 
+  // Hiện chú thích khi lọc đúng khoảng 17/4/2026 – 15/5/2026 VÀ resolution là '1d'
+  const showNote = useMemo(() => {
+    if (!dateRange || resolution !== '1d') return false;
+    return dateRange.start === '2026-04-17' && dateRange.end === '2026-05-15';
+  }, [dateRange, resolution]);
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -65,8 +77,18 @@ export function TempDelayCorrelationChart({ rawWeatherHistory }: { rawWeatherHis
     // Sử dụng p-6 và các class border/shadow giống hệt Pressure Chart
     <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
       {/* Tiêu đề h2, mb-6, text-xl để đồng bộ */}
-      <h2 className="mb-6 text-xl font-bold text-gray-800">Tương quan Nhiệt độ & Tỉ lệ trễ</h2>
-      
+      <h2 className="mb-2 text-xl font-bold text-gray-800">Tương quan Nhiệt độ & Tỉ lệ trễ</h2>
+
+      {/* Chú thích: chỉ hiện khi đủ điều kiện lọc ngày 14/4–15/5 + resolution 1d */}
+      {showNote && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-700">
+          <span className="mt-0.5">💡</span>
+          <span>
+            <strong>Nhận xét:</strong> Khi nhiệt độ trung bình ngày càng thấp thì tỷ lệ trễ chuyến trong ngày đó càng cao.
+          </span>
+        </div>
+      )}
+
       {/* Bọc ResponsiveContainer trong div có chiều cao h-[455px] đúng bằng Pressure Chart */}
       <div className="w-full h-[450px]">
         <ResponsiveContainer width="100%" height={450}>

@@ -47,6 +47,40 @@ from db_utils import load_table, save_dataframe
 
 DELAY_THRESHOLD_MINUTES = 15
 TRAINING_SNAPSHOT_LEAD_MINUTES = 30
+FEATURE_COLS = [
+    "scheduled_hour",
+    "sin_hour",
+    "cos_hour",
+    "scheduled_dayofweek",
+    "scheduled_month",
+    "minutes_to_departure_at_snapshot",
+    "source_airport",
+    "direction",
+    "route_airport_std",
+    "flight_number",
+    "airline_code",
+    "flight_num_only",
+    "is_estimated_missing",
+    "dew_point_c",
+    "wind_direction_deg",
+    "wind_speed_kt",
+    "visibility_miles",
+    "visibility_bin",
+    "cloud_cover",
+    "cloud_severity",
+    "temp_dew_spread",
+    "is_high_wind",
+    "fog_risk",
+    "weather_severity_index",
+    "is_wind_variable",
+    "airport_hourly_congestion",
+    "is_rush_hour",
+    "is_trunk_route",
+    "route_delay_rate",
+    "airline_historical_delay_rate",
+    "airport_congestion_2h",
+    "rolling_delay_rate_2h",
+]
 
 def normalize_space(x):
     if pd.isna(x):
@@ -194,6 +228,40 @@ def merge_weather_asof(flight_df: pd.DataFrame, weather_df: pd.DataFrame, tolera
          return left.copy()
     return pd.concat(merged_parts, ignore_index=True)
 
+def impute_weather(
+    df: pd.DataFrame,
+    tolerance: pd.Timedelta,
+) -> pd.DataFrame:
+    out = df.sort_values(["source_airport", "retrieved_at_vn"]).copy()
+    wx_cols = [
+        "temperature_c",
+        "dew_point_c",
+        "wind_direction_deg",
+        "wind_speed_kt",
+        "visibility_miles",
+        "cloud_cover",
+        "is_wind_variable",
+        "raw_metar",
+        "report_time_vn",
+    ]
+    max_age = tolerance.total_seconds() / 60.0
+
+    out[wx_cols] = out.groupby("source_airport")[wx_cols].ffill()
+    out["weather_age_minutes"] = (
+        (out["retrieved_at_vn"] - out["report_time_vn"]).dt.total_seconds() / 60.0
+    )
+    stale_mask = out["weather_age_minutes"].gt(max_age)
+    out.loc[stale_mask, wx_cols] = np.nan
+    out.loc[stale_mask, "weather_age_minutes"] = np.nan
+
+    num_cols = ["temperature_c", "dew_point_c", "wind_speed_kt", "visibility_miles"]
+    for c in num_cols:
+        if c in out.columns:
+            med = out.groupby("source_airport")[c].transform("median")
+            out[c] = out[c].fillna(med)
+
+    return out
+
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
 
@@ -271,6 +339,49 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     route_pairs = pd.Series(list(zip(source_iata, dest_iata)), index=out.index)
     out["is_trunk_route"] = route_pairs.isin(trunk_routes).astype(int)
 
+    return out
+
+def add_operational_features(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    if "source_airport" not in out.columns:
+        raise ValueError("Missing required column: source_airport")
+
+    if "flight_key" not in out.columns:
+        key_cols = ["source_airport", "direction", "route_airport_std", "flight_number", "scheduled_dt"]
+        if all(c in out.columns for c in key_cols):
+            out["flight_key"] = out[key_cols].astype(str).agg("|".join, axis=1)
+
+    out["airport_congestion_2h"] = np.nan
+    out["rolling_delay_rate_2h"] = np.nan
+
+    for _, idx in out.groupby("source_airport", sort=False).groups.items():
+        g = out.loc[idx].copy()
+
+        g_cong = g.sort_values("scheduled_dt")
+        if g_cong["scheduled_dt"].notna().any():
+            s_cong = g_cong.set_index("scheduled_dt")
+            if "flight_key" in s_cong.columns:
+                cong_vals = s_cong["flight_key"].rolling("2h", center=True).count().values
+            else:
+                cong_vals = pd.Series(1, index=s_cong.index).rolling("2h", center=True).count().values
+            out.loc[g_cong.index, "airport_congestion_2h"] = cong_vals
+
+        g_roll = g.sort_values("retrieved_at_vn")
+        if g_roll["retrieved_at_vn"].notna().any() and "label_delay" in g_roll.columns:
+            s_roll = g_roll.set_index("retrieved_at_vn")
+            roll_vals = s_roll["label_delay"].rolling("2h", closed="left").mean().values
+            out.loc[g_roll.index, "rolling_delay_rate_2h"] = roll_vals
+
+    return out
+
+def add_target_encodings(train_df: pd.DataFrame, apply_df: pd.DataFrame) -> pd.DataFrame:
+    out = apply_df.copy()
+    global_rate = train_df["label_delay"].mean()
+    route_rate = train_df.groupby("route_airport_std")["label_delay"].mean()
+    airline_rate = train_df.groupby("airline_code")["label_delay"].mean()
+
+    out["route_delay_rate"] = out["route_airport_std"].map(route_rate).fillna(global_rate)
+    out["airline_historical_delay_rate"] = out["airline_code"].map(airline_rate).fillna(global_rate)
     return out
 
 def ensure_table_has_columns(table_name: str, df: pd.DataFrame) -> None:
@@ -453,6 +564,8 @@ def process_data():
         .apply(pick_training_snapshot)
         .reset_index(drop=True)
     )
+    if "flight_key" not in flights_training_snapshot.columns:
+        flights_training_snapshot["flight_key"] = flights_training_snapshot[key_cols].astype(str).agg("|".join, axis=1)
 
     weather = weather_raw.rename(
         columns={
@@ -468,6 +581,20 @@ def process_data():
             "raw_metar": "raw_metar",
         },
     ).copy()
+    for col in [
+        "icao_code",
+        "report_time_utc",
+        "report_time_vn",
+        "temperature_c",
+        "dew_point_c",
+        "wind_direction_deg",
+        "wind_speed_kt",
+        "visibility_miles",
+        "cloud_cover",
+        "raw_metar",
+    ]:
+        if col not in weather.columns:
+            weather[col] = np.nan
 
     icao_map = {
         "VVNB": "NB",
@@ -490,21 +617,35 @@ def process_data():
 
     weather["wind_direction_deg"] = weather["wind_direction_deg"].replace({"VRB": np.nan})
     weather["wind_direction_deg"] = pd.to_numeric(weather["wind_direction_deg"], errors="coerce")
-    weather["is_wind_variable"] = weather_raw["wind_direction_deg"].astype(str).eq("VRB").astype(int)
+    if "wind_direction_deg" in weather_raw.columns:
+        weather["is_wind_variable"] = weather_raw["wind_direction_deg"].astype(str).eq("VRB").astype(int)
+    else:
+        weather["is_wind_variable"] = 0
 
     weather = weather.dropna(subset=["source_airport", "report_time_vn"]).sort_values(["source_airport", "report_time_vn"])
     weather = weather.drop_duplicates(subset=["source_airport", "report_time_vn", "raw_metar"], keep="last")
 
-    current_with_weather = merge_weather_asof(flights_current, weather)
-    train_with_weather = merge_weather_asof(flights_training_snapshot, weather)
+    WX_TOLERANCE = pd.Timedelta(hours=3)
+    current_with_weather = merge_weather_asof(flights_current, weather, tolerance=WX_TOLERANCE)
+    train_with_weather = merge_weather_asof(flights_training_snapshot, weather, tolerance=WX_TOLERANCE)
+
+    current_with_weather = impute_weather(current_with_weather, tolerance=WX_TOLERANCE)
+    train_with_weather = impute_weather(train_with_weather, tolerance=WX_TOLERANCE)
 
     current_features = add_features(current_with_weather)
     training_features = add_features(train_with_weather)
 
+    current_features = add_operational_features(current_features)
+    training_features = add_operational_features(training_features)
+
+    train_base = training_features[training_features["label_delay"].isin([0, 1])].copy()
+    current_features = add_target_encodings(train_base, current_features)
+    training_features = add_target_encodings(train_base, training_features)
+
     training_dataset = training_features[training_features["label_delay"].isin([0, 1])].copy()
     training_dataset["label_delay"] = training_dataset["label_delay"].astype(int)
 
-    training_dataset = training_dataset[training_dataset["minutes_to_departure_at_snapshot"] >= 0].copy()
+    # training_dataset = training_dataset[training_dataset["minutes_to_departure_at_snapshot"] >= 0].copy()
 
     training_dataset_to_save = training_dataset.copy()
     if "flight_key" not in training_dataset_to_save.columns:
